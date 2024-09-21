@@ -17,7 +17,7 @@ fastapi-swagger = "^0.2.3"
 icalendar = "^5.0.13"
 
 [tool.poetry.group.prod.dependencies]
-gunicorn = "^22.0.0"
+gunicorn = "^23.0.0"
 
 [tool.poetry.group.dev]
 optional = true
