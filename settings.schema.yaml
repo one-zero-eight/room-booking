@@ -24,7 +24,7 @@ $defs:
     type: string
   Room:
     additionalProperties: false
-    description: .
+    description: Room description.
     properties:
       id:
         description: Room slug

@@ -15,7 +15,7 @@ class SettingBaseModel(BaseModel):
 
 
 class Room(SettingBaseModel):
-    """."""
+    """Room description."""
 
     id: str
     "Room slug"
