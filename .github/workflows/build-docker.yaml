@@ -52,6 +52,8 @@ jobs:
           push: ${{ github.repository_owner == 'one-zero-eight' && 'true' || 'false' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   deploy-staging:
     if: github.repository_owner == 'one-zero-eight' && ((github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging') || (github.event_name == 'push' && github.ref == 'refs/heads/main'))
