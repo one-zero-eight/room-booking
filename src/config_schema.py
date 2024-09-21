@@ -2,7 +2,7 @@ from enum import StrEnum
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, Field, SecretStr, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class Environment(StrEnum):
@@ -14,32 +14,24 @@ class SettingBaseModel(BaseModel):
     model_config = ConfigDict(use_attribute_docstrings=True, extra="forbid")
 
 
-class Cookies(SettingBaseModel):
-    # Authentication
-    name: str = "token"
-    domain: str = "innohassle.ru"
-    allowed_domains: list[str] = ["innohassle.ru", "api.innohassle.ru", "localhost"]
+class Room(SettingBaseModel):
+    """."""
+
+    id: str
+    "Room slug"
+    title: str
+    "Room title"
+    ics_url: str = Field(exclude=True)
+    "URL of the ICS calendar"
 
 
-class StaticFiles(SettingBaseModel):
-    mount_path: str = "/static"
-    mount_name: str = "static"
-    directory: Path = Path("static")
+class Accounts(SettingBaseModel):
+    """InNoHassle-Accounts integration settings"""
 
-
-class Database(SettingBaseModel):
-    """PostgreSQL database settings."""
-
-    uri: SecretStr = Field(..., examples=["postgresql+asyncpg://postgres:postgres@localhost:5432/postgres"])
-
-
-class Predefined(SettingBaseModel):
-    """Predefined settings. Will be used in setup stage."""
-
-    first_superuser_login: str = "admin"
-    "Login for the first superuser"
-    first_superuser_password: str = "admin"
-    "Password for the first superuser"
+    api_url: str = "https://api.innohassle.ru/accounts/v0"
+    "URL of the Accounts API"
+    well_known_url: str = "https://api.innohassle.ru/accounts/v0/.well-known"
+    "URL of the well-known endpoint for the Accounts API"
 
 
 class Settings(SettingBaseModel):
@@ -52,24 +44,14 @@ class Settings(SettingBaseModel):
     "App environment flag"
     app_root_path: str = ""
     'Prefix for the API path (e.g. "/api/v0")'
-    database: Database
-    "PostgreSQL database settings"
-    predefined: Predefined = Predefined()
-    "Predefined settings"
-    session_secret_key: SecretStr
-    "Secret key for sessions middleware. Use 'openssl " "rand -hex 32' to generate keys"
-    jwt_private_key: SecretStr
-    "Private key for JWT. Use 'openssl genrsa -out private.pem 2048' to generate keys"
-    jwt_public_key: str
-    "Public key for JWT. Use 'openssl rsa -in private.pem -pubout -out public.pem' to generate keys"
-    # Static files
-    static_files: StaticFiles | None = None
-    "Static files settings"
+    rooms: list[Room] = []
+    "List of rooms"
+    ics_cache_ttl_seconds: int = 60
+    "TTL for the ICS cache in seconds"
     cors_allow_origins: list[str] = ["https://innohassle.ru", "http://localhost:3000"]
     "CORS origins, used by FastAPI CORSMiddleware"
-    # Authentication
-    cookie: Cookies | None = Cookies()
-    "Cookies settings"
+    accounts: Accounts
+    "InNoHassle-Accounts integration settings"
 
     @classmethod
     def from_yaml(cls, path: Path) -> "Settings":

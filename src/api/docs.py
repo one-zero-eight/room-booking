@@ -5,16 +5,16 @@ from types import ModuleType
 from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
 from fastapi.routing import APIRoute
-import src.modules.user.router
-import src.modules.auth.router
+import src.modules.rooms.routes
+import src.modules.bookings.routes
 from src.config import settings
 
 # API version
 VERSION = "0.1.0"
 
 # Info for OpenAPI specification
-TITLE = "FastAPI template"
-SUMMARY = "FastAPI template for InNoHassle ecosystem."
+TITLE = "Room booking API"
+SUMMARY = "API for viewing the booking status of rooms."
 
 DESCRIPTION = """
 ### About this project
@@ -40,8 +40,8 @@ def doc_from_module(module: ModuleType) -> str:
 
 
 TAGS_INFO = [
-    {"name": "Auth", "description": doc_from_module(src.modules.auth.router)},
-    {"name": "Users", "description": doc_from_module(src.modules.user.router)},
+    {"name": "Rooms", "description": doc_from_module(src.modules.rooms.routes)},
+    {"name": "Bookings", "description": doc_from_module(src.modules.bookings.routes)},
 ]
 
 

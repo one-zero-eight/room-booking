@@ -8,8 +8,6 @@ __pycache__
 ### Environment ###
 .env
 settings.yaml
-static
 
 ### Sensible ###
-/private.pem
-/public.pem
+*.pem

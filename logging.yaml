@@ -32,5 +32,5 @@ loggers:
     handlers:
       - default
     propagate: no
-  passlib:
-    level: ERROR
+  httpx:
+    level: WARNING

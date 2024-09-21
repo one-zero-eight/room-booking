@@ -4,8 +4,6 @@
 # Except code
 !/src/
 !/deploy/
-!/alembic/
-!/alembic.ini
 !/pyproject.toml
 !/poetry.lock
 !logging.yaml
