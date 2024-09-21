@@ -52,6 +52,9 @@ jobs:
           path: ~/.cache/pre-commit
           key: pre-commit-3|${{ env.pythonLocation }}|${{ hashFiles('.pre-commit-config.yaml') }}
       - name: Run pre-commit
-        run: poetry run pre-commit run --show-diff-on-failure --color=always --all-files --hook-stage manual >> $GITHUB_STEP_SUMMARY
+        run: |
+          echo "```" >> $GITHUB_STEP_SUMMARY
+          poetry run pre-commit run --show-diff-on-failure --color=never --all-files --hook-stage manual >> $GITHUB_STEP_SUMMARY
+          echo "```" >> $GITHUB_STEP_SUMMARY
         env:
           RUFF_FORMAT: github
