@@ -65,15 +65,13 @@ Now the API is running on http://localhost:8000. Good job!
 
 We use Docker with Docker Compose plugin to run the service on servers.
 
-1. Copy the file with environment variables: `cp .example.env .env`
-2. Change environment variables in the `.env` file
-3. Copy the file with settings: `cp settings.example.yaml settings.yaml`
-4. Change settings in the `settings.yaml` file according to your needs
+1. Copy the file with settings: `cp settings.example.yaml settings.yaml`
+2. Change settings in the `settings.yaml` file according to your needs
    (check [settings.schema.yaml](settings.schema.yaml) for more info)
-5. Install Docker with Docker Compose
-6. Build a Docker image: `docker compose build --pull`
-7. Run the container: `docker compose up --detach`
-8. Check the logs: `docker compose logs -f`
+3. Install Docker with Docker Compose
+4. Build a Docker image: `docker compose build --pull`
+5. Run the container: `docker compose up --detach`
+6. Check the logs: `docker compose logs -f`
 
 # How to update dependencies
 
