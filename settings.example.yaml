@@ -8,3 +8,4 @@ rooms:
   - id: "301"
     title: "Lecture Room 301"
     ics_url: ""
+    my_uni_id: 1

@@ -38,10 +38,15 @@ $defs:
         description: URL of the ICS calendar
         title: Ics Url
         type: string
+      my_uni_id:
+        description: ID of room on My University portal
+        title: My Uni Id
+        type: integer
     required:
     - id
     - title
     - ics_url
+    - my_uni_id
     title: Room
     type: object
 additionalProperties: false

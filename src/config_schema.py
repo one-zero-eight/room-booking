@@ -23,6 +23,8 @@ class Room(SettingBaseModel):
     "Room title"
     ics_url: str = Field(exclude=True)
     "URL of the ICS calendar"
+    my_uni_id: int
+    "ID of room on My University portal"
 
 
 class Accounts(SettingBaseModel):
