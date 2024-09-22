@@ -75,6 +75,7 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           fingerprint: ${{ secrets.SSH_FINGERPRINT }}
           script_stop: true # Stop script on error
+          command_timeout: 30m
           script: |
             cd "${{ secrets.DEPLOY_DIRECTORY }}"
             bash "${{ secrets.DEPLOY_SCRIPT }}" "${{ needs.build-and-push-image.outputs.imageid }}"
@@ -99,6 +100,7 @@ jobs:
           key: ${{ secrets.SSH_KEY }}
           fingerprint: ${{ secrets.SSH_FINGERPRINT }}
           script_stop: true # Stop script on error
+          command_timeout: 30m
           script: |
             cd "${{ secrets.DEPLOY_DIRECTORY }}"
             bash "${{ secrets.DEPLOY_SCRIPT }}" "${{ needs.build-and-push-image.outputs.imageid }}"

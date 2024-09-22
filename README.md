@@ -25,7 +25,7 @@ This is the API for viewing the booking status of rooms.
 2. Install [Poetry](https://python-poetry.org/docs/)
 3. Install project dependencies with [Poetry](https://python-poetry.org/docs/cli/#options-2).
    ```bash
-   poetry install --with dev
+   poetry install
    ```
 4. Set up [pre-commit](https://pre-commit.com/) hooks:
 
