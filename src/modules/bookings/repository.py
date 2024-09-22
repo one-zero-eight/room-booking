@@ -15,6 +15,8 @@ from src.modules.rooms.repository import room_repository
 class Booking(BaseModel):
     room_id: str
     "ID of the room"
+    title: str
+    "Title of the booking"
     start: datetime.datetime
     "Start time of booking"
     end: datetime.datetime
@@ -58,6 +60,7 @@ class BookingRepository:
 
                 yield Booking(
                     room_id=room_id,
+                    title=event["SUMMARY"] or "",
                     start=to_msk(to_datetime(event["DTSTART"].dt)),
                     end=to_msk(to_datetime(event["DTEND"].dt)),
                 )
