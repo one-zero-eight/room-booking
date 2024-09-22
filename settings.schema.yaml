@@ -77,18 +77,16 @@ properties:
     description: TTL for the ICS cache in seconds
     title: Ics Cache Ttl Seconds
     type: integer
-  cors_allow_origins:
-    default:
-    - https://innohassle.ru
-    - http://localhost:3000
-    description: CORS origins, used by FastAPI CORSMiddleware
-    items:
-      type: string
-    title: Cors Allow Origins
-    type: array
+  cors_allow_origin_regex:
+    default: .*
+    description: 'Allowed origins for CORS: from which domains requests to the API
+      are allowed. Specify as a regex: `https://.*.innohassle.ru`'
+    title: Cors Allow Origin Regex
+    type: string
   accounts:
     $ref: '#/$defs/Accounts'
-required:
-- accounts
+    default:
+      api_url: https://api.innohassle.ru/accounts/v0
+      well_known_url: https://api.innohassle.ru/accounts/v0/.well-known
 title: Settings
 type: object

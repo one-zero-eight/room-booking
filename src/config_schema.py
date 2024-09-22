@@ -50,9 +50,9 @@ class Settings(SettingBaseModel):
     "List of rooms"
     ics_cache_ttl_seconds: int = 60
     "TTL for the ICS cache in seconds"
-    cors_allow_origins: list[str] = ["https://innohassle.ru", "http://localhost:3000"]
-    "CORS origins, used by FastAPI CORSMiddleware"
-    accounts: Accounts
+    cors_allow_origin_regex: str = ".*"
+    "Allowed origins for CORS: from which domains requests to the API are allowed. Specify as a regex: `https://.*.innohassle.ru`"
+    accounts: Accounts = Accounts()
     "InNoHassle-Accounts integration settings"
 
     @classmethod

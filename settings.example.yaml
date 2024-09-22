@@ -1,8 +1,6 @@
 $schema: "./settings.schema.yaml"
 # ---------- Application settings ----- #
-accounts:
-  api_url: https://api.innohassle.ru/accounts/v0
-  well_known_url: https://api.innohassle.ru/accounts/v0/.well-known
+environment: development
 
 rooms:
   - id: "301"

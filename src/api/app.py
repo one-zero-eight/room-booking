@@ -9,7 +9,6 @@ from src.api.docs import generate_unique_operation_id, custom_openapi
 from src.api.lifespan import lifespan
 from src.api.routers import routers
 from src.config import settings
-from src.config_schema import Environment
 
 # App definition
 app = FastAPI(
@@ -27,16 +26,13 @@ patch_fastapi(app)
 app.openapi = custom_openapi(app)  # type: ignore
 
 # CORS settings
-if settings.cors_allow_origins:
-    # noinspection PyTypeChecker
-    app.add_middleware(
-        middleware_class=CORSMiddleware,
-        allow_origins=settings.cors_allow_origins,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-        allow_origin_regex=".*" if settings.environment == Environment.DEVELOPMENT else None,
-    )
+app.add_middleware(
+    CORSMiddleware,
+    allow_origin_regex=settings.cors_allow_origin_regex,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 for router in routers:
