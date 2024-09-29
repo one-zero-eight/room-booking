@@ -1,6 +1,7 @@
 import asyncio
 import datetime
 import itertools
+from traceback import format_exc
 from typing import Generator
 
 import httpx
@@ -23,31 +24,61 @@ class Booking(BaseModel):
     "End time of booking"
 
 
+# noinspection PyMethodMayBeStatic
 class BookingRepository:
     bookings_cache: dict[str, tuple[list[Booking], datetime.datetime]] = {}
+    _async_events: dict[str, asyncio.Event | None] = {}
+    _async_semaphore = asyncio.Semaphore(5)
+    _client = httpx.AsyncClient()
+
+    def get_cached_bookings(self, room_id: str, use_ttl: bool = False) -> list[Booking] | None:
+        cached_bookings, cached_dt = self.bookings_cache.get(room_id, (None, None))
+        if cached_bookings is not None and cached_dt is not None:
+            if not use_ttl:
+                return cached_bookings
+            if datetime.datetime.now() - cached_dt < datetime.timedelta(seconds=settings.ics_cache_ttl_seconds):
+                return cached_bookings
 
     async def fetch_bookings(self, room_id: str) -> list[Booking] | None:
         room = await room_repository.get_by_id(room_id)
         if not room:
             return None
 
-        cached_ics, cached_dt = self.bookings_cache.get(room_id, (None, None))
-        if cached_ics and cached_dt:
-            if datetime.datetime.now() - cached_dt < datetime.timedelta(seconds=settings.ics_cache_ttl_seconds):
-                return cached_ics
+        if cached_bookings := self.get_cached_bookings(room_id, use_ttl=True):
+            logger.info(f"Using cached bookings for room {room_id} with ttl")
+            return cached_bookings
 
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.get(room.ics_url, timeout=30)
-                response.raise_for_status()
+        if event := self._async_events.get(room_id):
+            logger.info(f"Already fetching bookings for room {room_id}")
+            await event.wait()
+            logger.info(f"Using cached bookings from concurrent job for room {room_id}")
+            return self.get_cached_bookings(room_id, use_ttl=False)
 
-                ics = response.text
-                bookings = list(self.extract_bookings_from_ics(room_id, ics))
-                self.bookings_cache[room_id] = (bookings, datetime.datetime.now())
-                return bookings
-            except Exception as error:
-                logger.warning(f"Failed to fetch ics: {error}")
-                return cached_ics
+        # no event setted
+        event = asyncio.Event()
+        self._async_events[room_id] = event
+        logger.info(f"Job started to fetch bookings for room {room_id}")
+
+        try:
+            async with self._async_semaphore:
+                logger.info(f"[{self._async_semaphore._value}] Fetching ics for room {room_id}...")
+                response = await self._client.get(room.ics_url, timeout=30)
+            response.raise_for_status()
+
+            ics = response.text
+            bookings = list(self.extract_bookings_from_ics(room_id, ics))
+            self.bookings_cache[room_id] = (bookings, datetime.datetime.now())
+            return bookings
+        except httpx.ReadTimeout:
+            logger.warning("Failed to fetch ics: Timeout")
+            return self.get_cached_bookings(room_id, use_ttl=False)
+        except:  # noqa: E722
+            logger.warning(f"Failed to fetch ics: {format_exc()}")
+            return self.get_cached_bookings(room_id, use_ttl=False)
+        finally:
+            logger.info(f"Notifying other tasks that bookings for room {room_id} are ready")
+            event.set()
+            self._async_events[room_id] = None
 
     def extract_bookings_from_ics(self, room_id: str, ics: str) -> Generator[Booking, None, None]:
         calendar = icalendar.Calendar.from_ical(ics)
