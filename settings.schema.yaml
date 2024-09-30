@@ -34,6 +34,10 @@ $defs:
         description: Room title
         title: Title
         type: string
+      short_name:
+        description: Shorter version of room title
+        title: Short Name
+        type: string
       ics_url:
         description: URL of the ICS calendar
         title: Ics Url
@@ -42,9 +46,35 @@ $defs:
         description: ID of room on My University portal
         title: My Uni Id
         type: integer
+      capacity:
+        anyOf:
+        - type: integer
+        - type: 'null'
+        default: null
+        description: Room capacity, amount of people
+        title: Capacity
+      access_level:
+        anyOf:
+        - enum:
+          - yellow
+          - red
+          - special
+          type: string
+        - type: 'null'
+        default: null
+        description: Access level to the room. Yellow = for students. Red = for employees.
+          Special = special rules apply.
+        title: Access Level
+      restrict_daytime:
+        default: false
+        description: Prohibit to book during working hours. True = this room is available
+          only at night 19:00-8:00, or full day on weekends.
+        title: Restrict Daytime
+        type: boolean
     required:
     - id
     - title
+    - short_name
     - ics_url
     - my_uni_id
     title: Room

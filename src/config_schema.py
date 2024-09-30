@@ -1,5 +1,6 @@
 from enum import StrEnum
 from pathlib import Path
+from typing import Literal
 
 import yaml
 from pydantic import BaseModel, Field, ConfigDict
@@ -21,10 +22,18 @@ class Room(SettingBaseModel):
     "Room slug"
     title: str
     "Room title"
+    short_name: str
+    "Shorter version of room title"
     ics_url: str = Field(exclude=True)
     "URL of the ICS calendar"
     my_uni_id: int
     "ID of room on My University portal"
+    capacity: int | None = None
+    "Room capacity, amount of people"
+    access_level: Literal["yellow", "red", "special"] | None = None
+    "Access level to the room. Yellow = for students. Red = for employees. Special = special rules apply."
+    restrict_daytime: bool = False
+    "Prohibit to book during working hours. True = this room is available only at night 19:00-8:00, or full day on weekends."
 
 
 class Accounts(SettingBaseModel):
