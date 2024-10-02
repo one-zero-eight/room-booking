@@ -1,11 +1,13 @@
 import asyncio
 import datetime
 import itertools
+import re
+from time import perf_counter
 from traceback import format_exc
-from typing import Generator
 
 import httpx
-import icalendar
+import pytz
+from dateutil.rrule import rrulestr
 from pydantic import BaseModel
 
 from src.api.logging_ import logger
@@ -45,28 +47,31 @@ class BookingRepository:
             return None
 
         if cached_bookings := self.get_cached_bookings(room_id, use_ttl=True):
-            logger.info(f"Using cached bookings for room {room_id} with ttl")
+            logger.debug(f"Using cached bookings for room {room_id} with ttl")
             return cached_bookings
 
         if event := self._async_events.get(room_id):
-            logger.info(f"Already fetching bookings for room {room_id}")
+            logger.debug(f"Already fetching bookings for room {room_id}")
             await event.wait()
-            logger.info(f"Using cached bookings from concurrent job for room {room_id}")
+            logger.debug(f"Using cached bookings from concurrent job for room {room_id}")
             return self.get_cached_bookings(room_id, use_ttl=False)
 
         # no event setted
         event = asyncio.Event()
         self._async_events[room_id] = event
-        logger.info(f"Job started to fetch bookings for room {room_id}")
+        logger.debug(f"Job started to fetch bookings for room {room_id}")
 
         try:
             async with self._async_semaphore:
-                logger.info(f"[{self._async_semaphore._value}] Fetching ics for room {room_id}...")
+                logger.debug(f"[{self._async_semaphore._value}] Fetching ics for room {room_id}...")
                 response = await self._client.get(room.ics_url, timeout=30)
             response.raise_for_status()
 
             ics = response.text
-            bookings = list(self.extract_bookings_from_ics(room_id, ics))
+            _t1 = perf_counter()
+            bookings = self.extract_bookings_from_ics(room_id, ics)
+            _t2 = perf_counter()
+            logger.debug(f"Parsed ics for room {room_id} in {_t2 - _t1:.2f}s")
             self.bookings_cache[room_id] = (bookings, datetime.datetime.now())
             return bookings
         except httpx.ReadTimeout:
@@ -76,27 +81,111 @@ class BookingRepository:
             logger.warning(f"Failed to fetch ics: {format_exc()}")
             return self.get_cached_bookings(room_id, use_ttl=False)
         finally:
-            logger.info(f"Notifying other tasks that bookings for room {room_id} are ready")
+            logger.debug(f"Notifying other tasks that bookings for room {room_id} are ready")
             event.set()
             self._async_events[room_id] = None
 
-    def extract_bookings_from_ics(self, room_id: str, ics: str) -> Generator[Booking, None, None]:
-        calendar = icalendar.Calendar.from_ical(ics)
-        vevents = calendar.walk(name="VEVENT")
-        for event in vevents:
-            try:
-                busy: icalendar.vText | None = event["X-MICROSOFT-CDO-BUSYSTATUS"]
-                if busy and busy.lower() == "free":
-                    continue  # The event is cancelled
+    dt_pattern = re.compile(r"((\d{8}T\d{6})|(\d{8}))")
 
-                yield Booking(
-                    room_id=room_id,
-                    title=event["SUMMARY"] or "",
-                    start=to_msk(to_datetime(event["DTSTART"].dt)),
-                    end=to_msk(to_datetime(event["DTEND"].dt)),
-                )
+    def extract_bookings_from_ics(self, room_id: str, ics: str) -> list[Booking]:
+        vevents = ics.split("BEGIN:VEVENT")
+        if not vevents:
+            return []
+
+        bookings = []
+
+        for event in vevents[1:]:
+            try:
+                event = event.replace("\r\n ", "")
+                busy = title = start = end = allday = rrule = None
+                splitted = event.split("\r\n")
+
+                for line in splitted:
+                    if line.startswith("SUMMARY:"):
+                        title = line[8:]
+                    elif line.startswith("DTSTART"):  # ...20240710T110000 or ... 20240811
+                        dt = self.dt_pattern.search(line[8:])
+                        if dt:
+                            as_string = dt.group()
+                            if len(as_string) == 15:
+                                start = datetime.datetime(
+                                    year=int(as_string[:4]),
+                                    month=int(as_string[4:6]),
+                                    day=int(as_string[6:8]),
+                                    hour=int(as_string[9:11]),
+                                    minute=int(as_string[11:13]),
+                                    second=int(as_string[13:15]),
+                                )
+                            else:
+                                start = datetime.datetime(
+                                    year=int(as_string[:4]),
+                                    month=int(as_string[4:6]),
+                                    day=int(as_string[6:8]),
+                                )
+                    elif line.startswith("DTEND"):
+                        dt = self.dt_pattern.search(line[6:])
+                        if dt:
+                            as_string = dt.group()
+                            if len(as_string) == 15:
+                                end = datetime.datetime(
+                                    year=int(as_string[:4]),
+                                    month=int(as_string[4:6]),
+                                    day=int(as_string[6:8]),
+                                    hour=int(as_string[9:11]),
+                                    minute=int(as_string[11:13]),
+                                    second=int(as_string[13:15]),
+                                )
+                            else:
+                                end = datetime.datetime(
+                                    year=int(as_string[:4]), month=int(as_string[4:6]), day=int(as_string[6:8])
+                                )
+                    elif line.startswith("X-MICROSOFT-CDO-BUSYSTATUS:"):
+                        busy = line[27:]
+                    elif line.startswith("X-MICROSOFT-CDO-ALLDAYEVENT:"):
+                        allday = line[28:]
+                    elif line.startswith("RRULE:"):
+                        rrule = line[6:]
+                if busy and busy.upper() == "FREE":
+                    logger.debug(f"Skipping event: {title}, {start}, {end}")
+                    continue  # The event is cancelled
+                if not start or not end:
+                    logger.warning(f"Failed to parse event: {event}: {title}, {start}, {end}")
+                    continue
+                end = to_msk(end)
+                start = to_msk(start)
+                title = title or ""
+                if allday and allday.upper() == "TRUE":
+                    start = start.replace(hour=0, minute=0, second=0, microsecond=0)
+                    end = start.replace(hour=23, minute=59, second=59, microsecond=0)
+
+                    if rrule:
+                        for dt in rrulestr(rrule, dtstart=start):
+                            bookings.append(
+                                Booking(
+                                    room_id=room_id,
+                                    title=title,
+                                    start=dt,
+                                    end=dt + (end - start),
+                                )
+                            )
+                    else:
+                        bookings.append(Booking(room_id=room_id, title=title, start=start, end=end))
+                else:
+                    if rrule:
+                        for dt in rrulestr(rrule, dtstart=start):
+                            bookings.append(
+                                Booking(
+                                    room_id=room_id,
+                                    title=title,
+                                    start=dt,
+                                    end=dt + (end - start),
+                                )
+                            )
+                    else:
+                        bookings.append(Booking(room_id=room_id, title=title, start=start, end=end))
             except Exception as error:
                 logger.warning(f"Failed to parse event: {error}, {event}")
+        return bookings
 
     async def get_bookings_for_all_rooms(self, from_dt: datetime.datetime, to_dt: datetime.datetime):
         from_dt = to_msk(from_dt)
@@ -119,8 +208,11 @@ def to_datetime(dt: datetime.datetime | datetime.date) -> datetime.datetime:
     return datetime.datetime.combine(dt, datetime.time.min)
 
 
+_timezone = pytz.timezone("Europe/Moscow")
+
+
 def to_msk(dt: datetime.datetime) -> datetime.datetime:
-    return dt.astimezone(datetime.timezone.utc).astimezone(datetime.timezone(datetime.timedelta(hours=3)))
+    return dt.astimezone(_timezone)
 
 
 booking_repository: BookingRepository = BookingRepository()
