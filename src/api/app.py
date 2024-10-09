@@ -7,7 +7,6 @@ from fastapi_swagger import patch_fastapi
 import src.api.logging_  # noqa: F401
 from src.api.docs import generate_unique_operation_id, custom_openapi
 from src.api.lifespan import lifespan
-from src.api.routers import routers
 from src.config import settings
 
 # App definition
@@ -34,6 +33,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from src.modules.rooms.routes import router as router_rooms  # noqa: E402
+from src.modules.bookings.routes import router as router_bookings  # noqa: E402
 
-for router in routers:
-    app.include_router(router)
+app.include_router(router_rooms)
+app.include_router(router_bookings)
