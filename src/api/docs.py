@@ -13,11 +13,23 @@ from src.config import settings
 VERSION = "0.1.0"
 
 # Info for OpenAPI specification
-TITLE = "Room booking API"
-SUMMARY = "API for viewing the booking status of rooms."
+TITLE = "InNoHassle Room booking API"
+SUMMARY = "View the booking status of rooms at Innopolis University."
 
 DESCRIPTION = """
 ### About this project
+
+This is the API for Room booking project in InNoHassle ecosystem developed by one-zero-eight community.
+
+Using this API you can view the booking status of rooms at Innopolis University.
+
+Backend is developed using FastAPI framework on Python.
+
+Note: API is unstable. Endpoints and models may change in the future.
+
+Useful links:
+- [Room booking API source code](https://github.com/one-zero-eight/room-booking)
+- [InNoHassle Website](https://innohassle.ru/)
 """
 
 CONTACT_INFO = {
