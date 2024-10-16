@@ -14,6 +14,14 @@ $defs:
         description: URL of the well-known endpoint for the Accounts API
         title: Well Known Url
         type: string
+      api_jwt_token:
+        description: JWT token for accessing the Accounts API as a service
+        format: password
+        title: Api Jwt Token
+        type: string
+        writeOnly: true
+    required:
+    - api_jwt_token
     title: Accounts
     type: object
   Environment:
@@ -22,6 +30,26 @@ $defs:
     - production
     title: Environment
     type: string
+  MyUni:
+    additionalProperties: false
+    description: My University integration settings
+    properties:
+      api_url:
+        default: https://my.university.innopolis.ru/apiv1
+        description: URL of the My University API
+        title: Api Url
+        type: string
+      secret_token:
+        anyOf:
+        - format: password
+          type: string
+          writeOnly: true
+        - type: 'null'
+        default: null
+        description: Secret token for My University API
+        title: Secret Token
+    title: MyUni
+    type: object
   Room:
     additionalProperties: false
     description: Room description.
@@ -115,8 +143,12 @@ properties:
     type: string
   accounts:
     $ref: '#/$defs/Accounts'
+  my_uni:
+    $ref: '#/$defs/MyUni'
     default:
-      api_url: https://api.innohassle.ru/accounts/v0
-      well_known_url: https://api.innohassle.ru/accounts/v0/.well-known
+      api_url: https://my.university.innopolis.ru/apiv1
+      secret_token: null
+required:
+- accounts
 title: Settings
 type: object

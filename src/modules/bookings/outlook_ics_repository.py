@@ -201,6 +201,11 @@ class BookingRepository:
         lists = await asyncio.gather(*[task(room.id) for room in await room_repository.get_all()])
         return itertools.chain(*lists)
 
+    def expire_cache_for_room(self, room_id: str):
+        if room_id in self.bookings_cache:
+            self.bookings_cache[room_id] = (self.bookings_cache[room_id][0], datetime.datetime.min)
+            logger.debug(f"Expired cache for room {room_id}")
+
 
 def to_datetime(dt: datetime.datetime | datetime.date) -> datetime.datetime:
     if isinstance(dt, datetime.datetime):

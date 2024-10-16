@@ -12,5 +12,11 @@ class RoomsRepository:
                 return room
         return None
 
+    async def get_by_my_uni_id(self, my_uni_room_id: int) -> Room | None:
+        for room in settings.rooms:
+            if room.my_uni_id == my_uni_room_id:
+                return room
+        return None
+
 
 room_repository: RoomsRepository = RoomsRepository()

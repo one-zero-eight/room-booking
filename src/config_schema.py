@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, SecretStr
 
 
 class Environment(StrEnum):
@@ -43,6 +43,17 @@ class Accounts(SettingBaseModel):
     "URL of the Accounts API"
     well_known_url: str = "https://api.innohassle.ru/accounts/v0/.well-known"
     "URL of the well-known endpoint for the Accounts API"
+    api_jwt_token: SecretStr
+    "JWT token for accessing the Accounts API as a service"
+
+
+class MyUni(SettingBaseModel):
+    """My University integration settings"""
+
+    api_url: str = "https://my.university.innopolis.ru/apiv1"
+    "URL of the My University API"
+    secret_token: SecretStr | None = None
+    "Secret token for My University API"
 
 
 class Settings(SettingBaseModel):
@@ -61,8 +72,10 @@ class Settings(SettingBaseModel):
     "TTL for the ICS cache in seconds"
     cors_allow_origin_regex: str = ".*"
     "Allowed origins for CORS: from which domains requests to the API are allowed. Specify as a regex: `https://.*.innohassle.ru`"
-    accounts: Accounts = Accounts()
+    accounts: Accounts
     "InNoHassle-Accounts integration settings"
+    my_uni: MyUni = MyUni()
+    "My University integration settings"
 
     @classmethod
     def from_yaml(cls, path: Path) -> "Settings":

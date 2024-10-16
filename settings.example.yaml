@@ -2,6 +2,11 @@ $schema: "./settings.schema.yaml"
 # ---------- Application settings ----- #
 environment: development
 
+accounts:
+  # generate service token for development (https://api.innohassle.ru/accounts/v0)
+  # /tokens/generate-service-token
+  api_jwt_token: "some-jwt-token"
+
 rooms:
   - id: "301"
     title: "Lecture Room 301"
