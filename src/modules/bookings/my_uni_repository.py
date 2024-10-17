@@ -2,11 +2,11 @@ import datetime
 from json import JSONDecodeError
 
 import httpx
-from httpx import HTTPStatusError
+from httpx import HTTPStatusError, Response
 from pydantic import BaseModel
 
 from src.config import settings
-from src.logging_ import logger
+from src.api.logging_ import logger
 from src.modules.bookings.outlook_ics_repository import booking_repository
 from src.modules.rooms.repository import room_repository
 
@@ -35,6 +35,20 @@ class MyUniBookingRepository:
     def get_authorized_client(self) -> httpx.AsyncClient:
         return httpx.AsyncClient(headers={"X-Booking-Token": f"{self.api_token}"}, base_url=self.api_url)
 
+    def extract_error(self, response: Response) -> str | None:
+        try:
+            response.raise_for_status()
+        except HTTPStatusError as e:
+            logger.warning(e)
+            try:
+                error_msg = response.json()["error"]
+            except JSONDecodeError:
+                error_msg = response.text
+            except KeyError:
+                error_msg = response.text
+
+            return error_msg
+
     async def list_user_bookings(self, email: str) -> tuple[list[MyUniBooking] | None, str | None]:
         async with self.get_authorized_client() as client:
             response = await client.get(
@@ -43,11 +57,11 @@ class MyUniBookingRepository:
                     "email": email,
                 },
             )
-            data = response.json()
+            error = self.extract_error(response)
+            if error is not None:
+                return None, error
 
-            if response.status_code != 200:
-                # Some error
-                return None, data["error"]
+            data = response.json()
 
             if not data["bookings"]:
                 # No bookings (data["bookings"] is empty list)
@@ -91,16 +105,9 @@ class MyUniBookingRepository:
                     ],  # "2024-10-17T04:00", msk time
                 },
             )
-            try:
-                response.raise_for_status()
-            except HTTPStatusError as e:
-                logger.warning(e)
-                try:
-                    error_msg = response.json()
-                except JSONDecodeError as e:
-                    error_msg = response.text
-
-                return False, error_msg
+            error = self.extract_error(response)
+            if error is not None:
+                return False, error
 
             room = await room_repository.get_by_my_uni_id(my_uni_room_id)
             booking_repository.expire_cache_for_room(room.id)
@@ -114,13 +121,10 @@ class MyUniBookingRepository:
                     "id": booking_id,
                 },
             )
-            data = response.json()
+            error = self.extract_error(response)
+            if error is not None:
+                return False, error
 
-            if response.status_code != 200:
-                # Some error
-                return False, data["error"]
-
-            # Success
             return True, None
 
 
