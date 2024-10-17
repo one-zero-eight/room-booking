@@ -1,9 +1,12 @@
 import datetime
+from json import JSONDecodeError
 
 import httpx
+from httpx import HTTPStatusError
 from pydantic import BaseModel
 
 from src.config import settings
+from src.logging_ import logger
 from src.modules.bookings.outlook_ics_repository import booking_repository
 from src.modules.rooms.repository import room_repository
 
@@ -88,13 +91,17 @@ class MyUniBookingRepository:
                     ],  # "2024-10-17T04:00", msk time
                 },
             )
-            data = response.json()
+            try:
+                response.raise_for_status()
+            except HTTPStatusError as e:
+                logger.warning(e)
+                try:
+                    error_msg = response.json()
+                except JSONDecodeError as e:
+                    error_msg = response.text
 
-            if response.status_code != 200:
-                # Some error
-                return False, data["error"]
+                return False, error_msg
 
-            # Success
             room = await room_repository.get_by_my_uni_id(my_uni_room_id)
             booking_repository.expire_cache_for_room(room.id)
             return True, None
