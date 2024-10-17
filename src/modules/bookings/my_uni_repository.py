@@ -42,10 +42,8 @@ class MyUniBookingRepository:
             logger.warning(e)
             try:
                 error_msg = response.json()["error"]
-            except JSONDecodeError:
-                error_msg = response.text
-            except KeyError:
-                error_msg = response.text
+            except (JSONDecodeError, KeyError):
+                error_msg = "Unexpected error"
 
             return error_msg
 
