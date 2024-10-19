@@ -11,7 +11,7 @@ from fastapi import APIRouter, Query, HTTPException
 
 from src.api.dependencies import VerifiedDep
 from src.api.exceptions import ObjectNotFound
-from src.modules.bookings.outlook_ics_repository import booking_repository, Booking
+from src.modules.bookings.exchange_repository import exchange_booking_repository, Booking
 from src.modules.bookings.my_uni_repository import my_uni_booking_repository, MyUniBooking
 from src.modules.rooms.repository import room_repository
 
@@ -26,7 +26,7 @@ async def bookings(
     end: datetime.datetime = Query(example=(_now + timedelta(hours=9)).isoformat(timespec="minutes")),
 ) -> list[Booking]:
     # Fetch the bookings from Outlook
-    return await booking_repository.get_bookings_for_all_rooms(start, end)
+    return exchange_booking_repository.get_bookings_for_all_rooms(start, end)
 
 
 @router.get("/bookings/my")
@@ -45,7 +45,7 @@ async def create_booking(
     user: VerifiedDep, room_id: str, title: str, start: datetime.datetime, end: datetime.datetime
 ) -> bool:
     # Check that the room exists
-    room = await room_repository.get_by_id(room_id)
+    room = room_repository.get_by_id(room_id)
     if room is None:
         raise ObjectNotFound()
     if not title:

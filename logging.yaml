@@ -34,3 +34,5 @@ loggers:
     propagate: no
   httpx:
     level: WARNING
+  exchangelib.fields:
+    level: WARNING

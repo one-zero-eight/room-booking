@@ -30,6 +30,30 @@ $defs:
     - production
     title: Environment
     type: string
+  Exchange:
+    additionalProperties: false
+    description: Exchange (Outlook) integration settings
+    properties:
+      ews_endpoint:
+        default: https://mail.innopolis.ru/EWS/Exchange.asmx
+        description: URL of the EWS endpoint
+        title: Ews Endpoint
+        type: string
+      username:
+        description: Username for accessing the EWS endpoint (email)
+        title: Username
+        type: string
+      password:
+        description: Password for accessing the EWS endpoint
+        format: password
+        title: Password
+        type: string
+        writeOnly: true
+    required:
+    - username
+    - password
+    title: Exchange
+    type: object
   MyUni:
     additionalProperties: false
     description: My University integration settings
@@ -66,9 +90,9 @@ $defs:
         description: Shorter version of room title
         title: Short Name
         type: string
-      ics_url:
-        description: URL of the ICS calendar
-        title: Ics Url
+      resource_email:
+        description: Email of the room resource
+        title: Resource Email
         type: string
       my_uni_id:
         description: ID of room on My University portal
@@ -103,7 +127,7 @@ $defs:
     - id
     - title
     - short_name
-    - ics_url
+    - resource_email
     - my_uni_id
     title: Room
     type: object
@@ -148,7 +172,10 @@ properties:
     default:
       api_url: https://my.university.innopolis.ru/apiv1
       secret_token: null
+  exchange:
+    $ref: '#/$defs/Exchange'
 required:
 - accounts
+- exchange
 title: Settings
 type: object

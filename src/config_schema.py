@@ -24,8 +24,8 @@ class Room(SettingBaseModel):
     "Room title"
     short_name: str
     "Shorter version of room title"
-    ics_url: str = Field(exclude=True)
-    "URL of the ICS calendar"
+    resource_email: str = Field(exclude=True)
+    "Email of the room resource"
     my_uni_id: int
     "ID of room on My University portal"
     capacity: int | None = None
@@ -56,6 +56,17 @@ class MyUni(SettingBaseModel):
     "Secret token for My University API"
 
 
+class Exchange(SettingBaseModel):
+    """Exchange (Outlook) integration settings"""
+
+    ews_endpoint: str = "https://mail.innopolis.ru/EWS/Exchange.asmx"
+    "URL of the EWS endpoint"
+    username: str
+    "Username for accessing the EWS endpoint (email)"
+    password: SecretStr
+    "Password for accessing the EWS endpoint"
+
+
 class Settings(SettingBaseModel):
     """
     Settings for the application.
@@ -76,6 +87,8 @@ class Settings(SettingBaseModel):
     "InNoHassle-Accounts integration settings"
     my_uni: MyUni = MyUni()
     "My University integration settings"
+    exchange: Exchange
+    "Exchange (Outlook) integration settings"
 
     @classmethod
     def from_yaml(cls, path: Path) -> "Settings":

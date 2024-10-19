@@ -14,4 +14,4 @@ router = APIRouter(tags=["Rooms"])
 
 @router.get("/rooms/")
 async def rooms() -> list[Room]:
-    return await room_repository.get_all()
+    return room_repository.get_all()

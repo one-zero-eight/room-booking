@@ -7,7 +7,6 @@ from pydantic import BaseModel
 
 from src.config import settings
 from src.api.logging_ import logger
-from src.modules.bookings.outlook_ics_repository import booking_repository
 from src.modules.rooms.repository import room_repository
 
 
@@ -71,7 +70,7 @@ class MyUniBookingRepository:
                 MyUniBooking.model_validate(
                     {
                         **booking,
-                        "room_id": (await room_repository.get_by_my_uni_id(booking["room_id"])).id,
+                        "room_id": room_repository.get_by_my_uni_id(booking["room_id"]).id,
                         # start_time is "2024-10-17 03:00:00" in MSK time
                         "start": datetime.datetime.strptime(booking["start_time"], "%Y-%m-%d %H:%M:%S").replace(
                             tzinfo=datetime.timezone(datetime.timedelta(hours=3))
@@ -107,8 +106,6 @@ class MyUniBookingRepository:
             if error is not None:
                 return False, error
 
-            room = await room_repository.get_by_my_uni_id(my_uni_room_id)
-            booking_repository.expire_cache_for_room(room.id)
             return True, None
 
     async def delete_booking(self, booking_id: int) -> tuple[bool, str | None]:
