@@ -87,7 +87,6 @@ class MyUniBookingRepository:
         self, email: str, my_uni_room_id: int, title: str, start: datetime.datetime, end: datetime.datetime
     ) -> tuple[bool, str | None]:
         async with self.get_authorized_client() as client:
-            print(start.astimezone(datetime.timezone(datetime.timedelta(hours=3))).isoformat(timespec="minutes")[0:16])
             response = await client.post(
                 "/room-booking/create",
                 params={
