@@ -23,24 +23,20 @@ class Booking(BaseModel):
 
 class ExchangeBookingRepository:
     ews_endpoint: str
-    username: str
-    password: str
+    account_email: str
     account: exchangelib.Account
 
-    def __init__(self, ews_endpoint: str, username: str, password: str):
+    def __init__(self, ews_endpoint: str, account_email: str):
         self.ews_endpoint = ews_endpoint
-        self.username = username
-        self.password = password
+        self.account_email = account_email
 
-        credentials = exchangelib.Credentials(self.username, self.password)
         config = exchangelib.Configuration(
-            credentials=credentials,
-            auth_type=exchangelib.BASIC,
+            auth_type=exchangelib.transport.NOAUTH,
             service_endpoint=self.ews_endpoint,
         )
         self.account = exchangelib.Account(
-            self.username,
-            credentials=credentials,
+            self.account_email,
+            access_type=exchangelib.DELEGATE,
             config=config,
             autodiscover=False,
         )
@@ -59,7 +55,7 @@ class ExchangeBookingRepository:
                 merged_free_busy_interval=5,
             )
         ):
-            if isinstance(busy_info, ErrorMailRecipientNotFound):
+            if isinstance(busy_info, ErrorMailRecipientNotFound) or busy_info.calendar_events is None:
                 continue
             for calendar_event in busy_info.calendar_events:
                 bookings.append(
@@ -88,6 +84,5 @@ def to_msk(dt: datetime.datetime) -> datetime.datetime:
 
 exchange_booking_repository = ExchangeBookingRepository(
     ews_endpoint=settings.exchange.ews_endpoint,
-    username=settings.exchange.username,
-    password=settings.exchange.password.get_secret_value(),
+    account_email=settings.exchange.username,
 )
