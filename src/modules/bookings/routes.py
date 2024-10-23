@@ -7,12 +7,12 @@ __all__ = ["router"]
 import datetime
 from datetime import timedelta
 
-from fastapi import APIRouter, Query, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from src.api.dependencies import VerifiedDep
 from src.api.exceptions import ObjectNotFound
-from src.modules.bookings.exchange_repository import exchange_booking_repository, Booking
-from src.modules.bookings.my_uni_repository import my_uni_booking_repository, MyUniBooking
+from src.modules.bookings.exchange_repository import Booking, exchange_booking_repository
+from src.modules.bookings.my_uni_repository import MyUniBooking, my_uni_booking_repository
 from src.modules.rooms.repository import room_repository
 
 router = APIRouter(tags=["Bookings"])

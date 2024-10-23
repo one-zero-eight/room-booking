@@ -1,8 +1,8 @@
 import datetime
 
+import exchangelib
 import pytz
 from exchangelib.errors import ErrorMailRecipientNotFound
-import exchangelib
 from pydantic import BaseModel
 
 import src.modules.bookings.patch_exchangelib  # noqa

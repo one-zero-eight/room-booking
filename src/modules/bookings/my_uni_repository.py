@@ -5,8 +5,8 @@ import httpx
 from httpx import HTTPStatusError, Response
 from pydantic import BaseModel
 
-from src.config import settings
 from src.api.logging_ import logger
+from src.config import settings
 from src.modules.rooms.repository import room_repository
 
 
