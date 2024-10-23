@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, Field, ConfigDict, SecretStr
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 
 class Environment(StrEnum):
@@ -92,7 +92,7 @@ class Settings(SettingBaseModel):
 
     @classmethod
     def from_yaml(cls, path: Path) -> "Settings":
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             yaml_config = yaml.safe_load(f)
 
         return cls.model_validate(yaml_config)

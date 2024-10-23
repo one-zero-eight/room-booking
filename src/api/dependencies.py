@@ -1,6 +1,6 @@
 __all__ = ["VerifiedDep"]
 
-from typing import TypeAlias, Annotated
+from typing import Annotated, TypeAlias
 
 from fastapi import Depends
 

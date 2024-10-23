@@ -5,8 +5,9 @@ from types import ModuleType
 from fastapi import FastAPI
 from fastapi.openapi.utils import get_openapi
 from fastapi.routing import APIRoute
-import src.modules.rooms.routes
+
 import src.modules.bookings.routes
+import src.modules.rooms.routes
 from src.config import settings
 
 # API version

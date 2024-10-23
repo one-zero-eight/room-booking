@@ -1,11 +1,11 @@
 __all__ = ["app"]
 
 from fastapi import FastAPI
-from starlette.middleware.cors import CORSMiddleware
 from fastapi_swagger import patch_fastapi
+from starlette.middleware.cors import CORSMiddleware
 
 import src.api.logging_  # noqa: F401
-from src.api.docs import generate_unique_operation_id, custom_openapi
+from src.api.docs import custom_openapi, generate_unique_operation_id
 from src.api.lifespan import lifespan
 from src.config import settings
 
@@ -33,8 +33,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from src.modules.rooms.routes import router as router_rooms  # noqa: E402
 from src.modules.bookings.routes import router as router_bookings  # noqa: E402
+from src.modules.rooms.routes import router as router_rooms  # noqa: E402
 
 app.include_router(router_rooms)
 app.include_router(router_bookings)
