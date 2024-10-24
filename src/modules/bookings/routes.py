@@ -22,6 +22,7 @@ _now = datetime.datetime.now(datetime.UTC)
 
 @router.get("/bookings/")
 async def bookings(
+    _: VerifiedDep,
     start: datetime.datetime = Query(example=_now.isoformat(timespec="minutes")),
     end: datetime.datetime = Query(example=(_now + timedelta(hours=9)).isoformat(timespec="minutes")),
 ) -> list[Booking]:
