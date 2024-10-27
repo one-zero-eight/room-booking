@@ -1,18 +1,13 @@
-$schema: http://json-schema.org/draft-07/schema#
+$schema: https://json-schema.org/draft-07/schema
 $defs:
   Accounts:
     additionalProperties: false
-    description: InNoHassle-Accounts integration settings
+    description: InNoHassle Accounts integration settings
     properties:
       api_url:
         default: https://api.innohassle.ru/accounts/v0
         description: URL of the Accounts API
         title: Api Url
-        type: string
-      well_known_url:
-        default: https://api.innohassle.ru/accounts/v0/.well-known
-        description: URL of the well-known endpoint for the Accounts API
-        title: Well Known Url
         type: string
       api_jwt_token:
         description: JWT token for accessing the Accounts API as a service
