@@ -2,13 +2,10 @@ import re
 from inspect import cleandoc
 from types import ModuleType
 
-from fastapi import FastAPI
-from fastapi.openapi.utils import get_openapi
 from fastapi.routing import APIRoute
 
 import src.modules.bookings.routes
 import src.modules.rooms.routes
-from src.config import settings
 
 # API version
 VERSION = "0.1.0"
@@ -69,27 +66,3 @@ def generate_unique_operation_id(route: APIRoute) -> str:
         operation_id = route.name.lower()
     operation_id = re.sub(r"\W+", "_", operation_id)
     return operation_id
-
-
-def custom_openapi(app: FastAPI):
-    def inner():
-        if app.openapi_schema:
-            return app.openapi_schema
-        openapi_schema = get_openapi(
-            title=TITLE,
-            summary=SUMMARY,
-            description=DESCRIPTION,
-            version=VERSION,
-            contact=CONTACT_INFO,
-            license_info=LICENSE_INFO,
-            tags=TAGS_INFO,
-            servers=[
-                {"url": settings.app_root_path, "description": "Current"},
-            ],
-            routes=app.routes,
-            separate_input_output_schemas=True,
-        )
-        app.openapi_schema = openapi_schema
-        return app.openapi_schema
-
-    return inner
