@@ -61,7 +61,7 @@ class ExchangeBookingRepository:
                 bookings.append(
                     Booking(
                         room_id=rooms[i].id,
-                        title=calendar_event.details.subject if calendar_event.details else "Busy",
+                        title=(calendar_event.details.subject or "Busy") if calendar_event.details else "Busy",
                         start=calendar_event.start,
                         end=calendar_event.end,
                     )
