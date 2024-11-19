@@ -4,7 +4,14 @@ environment: development
 
 accounts:
   # Get from https://api.innohassle.ru/accounts/v0/tokens/generate-service-token?sub=room-booking-local-dev&scopes=users&only_for_me=true
-  api_jwt_token: "secret"
+  api_jwt_token: null
+
+exchange:
+  username: null
+  password: null
+
+my_uni:
+  secret_token: null
 
 rooms:
   - id: "301"

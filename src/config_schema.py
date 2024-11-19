@@ -50,7 +50,7 @@ class MyUni(SettingBaseModel):
 
     api_url: str = "https://my.university.innopolis.ru/apiv1"
     "URL of the My University API"
-    secret_token: SecretStr | None = None
+    secret_token: SecretStr
     "Secret token for My University API"
 
 
@@ -81,7 +81,7 @@ class Settings(SettingBaseModel):
     "Allowed origins for CORS: from which domains requests to the API are allowed. Specify as a regex: `https://.*.innohassle.ru`"
     accounts: Accounts
     "InNoHassle Accounts integration settings"
-    my_uni: MyUni = MyUni()
+    my_uni: MyUni
     "My University integration settings"
     exchange: Exchange
     "Exchange (Outlook) integration settings"

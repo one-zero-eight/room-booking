@@ -59,14 +59,13 @@ $defs:
         title: Api Url
         type: string
       secret_token:
-        anyOf:
-        - format: password
-          type: string
-          writeOnly: true
-        - type: 'null'
-        default: null
         description: Secret token for My University API
+        format: password
         title: Secret Token
+        type: string
+        writeOnly: true
+    required:
+    - secret_token
     title: MyUni
     type: object
   Room:
@@ -164,13 +163,11 @@ properties:
     $ref: '#/$defs/Accounts'
   my_uni:
     $ref: '#/$defs/MyUni'
-    default:
-      api_url: https://my.university.innopolis.ru/apiv1
-      secret_token: null
   exchange:
     $ref: '#/$defs/Exchange'
 required:
 - accounts
+- my_uni
 - exchange
 title: Settings
 type: object
