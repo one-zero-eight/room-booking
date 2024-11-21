@@ -17,12 +17,12 @@ fastapi-swagger = "^0.2.3"
 gunicorn = "^23.0.0"
 httpx = {version = "^0.27.2"}
 pre-commit = "^4.0.0"
-pydantic = "^2.9.2"
+pydantic = "^2.10.0"
 pytz = "^2024.2"
 pyyaml = "^6.0.2"
 requests-curl = {git = "https://github.com/paivett/requests-curl.git", rev = "82a7fc1"}
 ruff = "^0.7.4"
-uvicorn = "^0.32.0"
+uvicorn = "^0.32.1"
 
 [tool.ruff]
 line-length = 120
