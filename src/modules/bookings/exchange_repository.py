@@ -43,6 +43,7 @@ class ExchangeBookingRepository:
 
     def fetch_bookings(self, room_ids: list[str], start: datetime.datetime, end: datetime.datetime) -> list[Booking]:
         rooms = room_repository.get_by_ids(room_ids)
+        rooms = list(filter(None, rooms))
         room_emails = [room.resource_email for room in rooms]
 
         accounts = [(email, "Resource", False) for email in room_emails]
@@ -68,11 +69,16 @@ class ExchangeBookingRepository:
                 )
         return bookings
 
-    def get_bookings_for_all_rooms(self, from_dt: datetime.datetime, to_dt: datetime.datetime):
+    def get_bookings_for_all_rooms(self, from_dt: datetime.datetime, to_dt: datetime.datetime) -> list[Booking]:
         from_dt = to_msk(from_dt)
         to_dt = to_msk(to_dt)
         room_ids = [room.id for room in room_repository.get_all()]
         return self.fetch_bookings(room_ids, from_dt, to_dt)
+
+    def get_booking_for_room(self, room_id: str, from_dt: datetime.datetime, to_dt: datetime.datetime) -> list[Booking]:
+        from_dt = to_msk(from_dt)
+        to_dt = to_msk(to_dt)
+        return self.fetch_bookings([room_id], from_dt, to_dt)
 
 
 _timezone = pytz.timezone("Europe/Moscow")
