@@ -14,6 +14,8 @@ class UserTokenData(BaseModel):
 
 
 class TokenRepository:
+    _cache = {}
+
     @classmethod
     def decode_token(cls, token: str) -> JWTClaims:
         now = time.time()
@@ -31,10 +33,27 @@ class TokenRepository:
             if innohassle_id is None:
                 raise credentials_exception
 
+            # Check cache
+            if innohassle_id in cls._cache:
+                cached_data = cls._cache[innohassle_id]
+                if cached_data["expires_at"] > time.time():
+                    return cached_data["user_data"]
+                else:
+                    del cls._cache[innohassle_id]  # Remove expired cache entry
+
+            # Fetch from DB if not in cache
             innohassle_user = await innohassle_accounts.get_user_by_id(innohassle_id)
             if innohassle_user is None:
                 raise credentials_exception
 
-            return UserTokenData(innohassle_id=innohassle_id, email=innohassle_user.innopolis_sso.email)
+            user_data = UserTokenData(innohassle_id=innohassle_id, email=innohassle_user.innopolis_sso.email)
+
+            # Store in cache with an expiry
+            cls._cache[innohassle_id] = {
+                "user_data": user_data,
+                "expires_at": time.time() + 60 * 60,  # 1 hour
+            }
+
+            return user_data
         except JoseError:
             raise credentials_exception
