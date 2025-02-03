@@ -5,9 +5,8 @@ Lists of bookings for rooms.
 __all__ = ["router"]
 
 import datetime
-from datetime import timedelta
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException
 
 from src.api.dependencies import VerifiedDep
 from src.api.exceptions import ObjectNotFound
@@ -17,15 +16,9 @@ from src.modules.rooms.repository import room_repository
 
 router = APIRouter(tags=["Bookings"])
 
-_now = datetime.datetime.now(datetime.UTC)
-
 
 @router.get("/bookings/")
-async def bookings(
-    _: VerifiedDep,
-    start: datetime.datetime = Query(example=_now.isoformat(timespec="minutes")),
-    end: datetime.datetime = Query(example=(_now + timedelta(hours=9)).isoformat(timespec="minutes")),
-) -> list[Booking]:
+async def bookings(_: VerifiedDep, start: datetime.datetime, end: datetime.datetime) -> list[Booking]:
     # Fetch the bookings from Outlook
     return exchange_booking_repository.get_bookings_for_all_rooms(start, end)
 
