@@ -64,8 +64,8 @@ class MyUniBookingRepository:
                 # No bookings (data["bookings"] is empty list)
                 return [], None
 
-            # Validate the response (data["bookings"] is a dict)
-            bookings = data["bookings"].values()
+            # Validate the response (data["bookings"] is a dict or a list)
+            bookings = data["bookings"].values() if isinstance(data["bookings"], dict) else data["bookings"]
             return [
                 MyUniBooking.model_validate(
                     {
