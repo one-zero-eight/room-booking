@@ -14,8 +14,8 @@ class RoomsRepository:
         self.room_by_my_uni_id = {room.my_uni_id: room for room in self.rooms}
         self.room_by_email = {room.resource_email: room for room in self.rooms}
 
-    def get_all(self) -> list[Room]:
-        return self.rooms
+    def get_all(self, include_red: bool = False) -> list[Room]:
+        return [room for room in self.rooms if room.access_level != "red" or include_red]
 
     def get_by_id(self, room_id: str) -> Room | None:
         return self.room_by_id.get(room_id)

@@ -26,7 +26,7 @@ class Room(SettingBaseModel):
     "Shorter version of room title"
     resource_email: str = Field(exclude=True)
     "Email of the room resource"
-    my_uni_id: int
+    my_uni_id: int | None = None
     "ID of room on My University portal"
     capacity: int | None = None
     "Room capacity, amount of people"

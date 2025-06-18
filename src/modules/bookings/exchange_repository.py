@@ -69,10 +69,14 @@ class ExchangeBookingRepository:
                 )
         return bookings
 
-    def get_bookings_for_all_rooms(self, from_dt: datetime.datetime, to_dt: datetime.datetime) -> list[Booking]:
+    def get_bookings_for_all_rooms(
+        self, from_dt: datetime.datetime, to_dt: datetime.datetime, include_red: bool = False
+    ) -> list[Booking]:
         from_dt = to_msk(from_dt)
         to_dt = to_msk(to_dt)
-        room_ids = [room.id for room in room_repository.get_all()]
+        room_ids = [
+            room.id for room in room_repository.get_all(include_red) if room.access_level != "red" or include_red
+        ]
         return self.fetch_bookings(room_ids, from_dt, to_dt)
 
     def get_booking_for_room(self, room_id: str, from_dt: datetime.datetime, to_dt: datetime.datetime) -> list[Booking]:

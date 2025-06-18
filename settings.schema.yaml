@@ -89,9 +89,12 @@ $defs:
         title: Resource Email
         type: string
       my_uni_id:
+        anyOf:
+        - type: integer
+        - type: 'null'
+        default: null
         description: ID of room on My University portal
         title: My Uni Id
-        type: integer
       capacity:
         anyOf:
         - type: integer
@@ -122,7 +125,6 @@ $defs:
     - title
     - short_name
     - resource_email
-    - my_uni_id
     title: Room
     type: object
 additionalProperties: false

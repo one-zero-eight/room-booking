@@ -18,9 +18,11 @@ router = APIRouter(tags=["Bookings"])
 
 
 @router.get("/bookings/")
-async def bookings(_: VerifiedDep, start: datetime.datetime, end: datetime.datetime) -> list[Booking]:
+async def bookings(
+    _: VerifiedDep, start: datetime.datetime, end: datetime.datetime, include_red: bool = False
+) -> list[Booking]:
     # Fetch the bookings from Outlook
-    return exchange_booking_repository.get_bookings_for_all_rooms(start, end)
+    return exchange_booking_repository.get_bookings_for_all_rooms(start, end, include_red)
 
 
 @router.get("/bookings/my")
