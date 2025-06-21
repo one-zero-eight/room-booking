@@ -5,8 +5,9 @@ Lists of bookings for rooms.
 __all__ = ["router"]
 
 import datetime
+from typing import Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from src.api.dependencies import VerifiedDep
 from src.api.exceptions import ObjectNotFound
@@ -19,10 +20,35 @@ router = APIRouter(tags=["Bookings"])
 
 @router.get("/bookings/")
 async def bookings(
-    _: VerifiedDep, start: datetime.datetime, end: datetime.datetime, include_red: bool = False
+    _: VerifiedDep,
+    room_id: Optional[str] = Query(None, title="ID for getting single room bookings"),
+    room_ids: Optional[list[str]] = Query(None, title="IDs for multiple rooms bookings"),
+    start: datetime.datetime = Query(..., description="Start date"),
+    end: datetime.datetime = Query(..., description="End date"),
+    include_red: bool = Query(False, description="Include red-access rooms bookings when getting all"),
 ) -> list[Booking]:
-    # Fetch the bookings from Outlook
-    return exchange_booking_repository.get_bookings_for_all_rooms(start, end, include_red)
+    """
+    Get bookings for all or for specific rooms.
+
+    - If `room_id` is provided, get bookings for that room.
+    - If `room_ids` is provided, get bookings for specified rooms.
+    - If neither `room_id` nor `room_ids` is provided, get bookings for all rooms.
+    - If both `room_id` and `room_ids` are provided, get bookings for all specified rooms.
+
+    `include_red` only applies when getting all rooms and is `False` be default.
+    """
+    if room_ids and room_id and room_id not in room_ids:
+        room_ids.append(room_id)
+
+    if room_ids:
+        return exchange_booking_repository.get_bookings_for_certain_rooms(room_ids=room_ids, from_dt=start, to_dt=end)
+    if room_id:
+        obj = room_repository.get_by_id(room_id)
+        if obj is None:
+            raise HTTPException(404, "Room not found")
+        return exchange_booking_repository.get_booking_for_room(room_id=room_id, from_dt=start, to_dt=end)
+    else:
+        return exchange_booking_repository.get_bookings_for_all_rooms(from_dt=start, to_dt=end, include_red=include_red)
 
 
 @router.get("/bookings/my")

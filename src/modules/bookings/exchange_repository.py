@@ -84,6 +84,13 @@ class ExchangeBookingRepository:
         to_dt = to_msk(to_dt)
         return self.fetch_bookings([room_id], from_dt, to_dt)
 
+    def get_bookings_for_certain_rooms(
+        self, room_ids: list[str], from_dt: datetime.datetime, to_dt: datetime.datetime
+    ) -> list[Booking]:
+        from_dt = to_msk(from_dt)
+        to_dt = to_msk(to_dt)
+        return self.fetch_bookings(room_ids, from_dt, to_dt)
+
 
 _timezone = pytz.timezone("Europe/Moscow")
 
