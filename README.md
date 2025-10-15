@@ -11,8 +11,8 @@ This is the API for viewing the booking status of rooms.
 
 ### Technologies
 
-- [Python 3.12](https://www.python.org/downloads/) & [Poetry](https://python-poetry.org/docs/)
-- [FastAPI](https://fastapi.tiangolo.com/) & [Pydantic](https://docs.pydantic.dev/latest/)
+- [Python 3.14](https://www.python.org/downloads/) & [uv](https://docs.astral.sh/uv/)
+- [FastAPI](https://fastapi.tiangolo.com/)
 - Formatting and linting: [Ruff](https://docs.astral.sh/ruff/), [pre-commit](https://pre-commit.com/)
 - Deployment: [Docker](https://www.docker.com/), [Docker Compose](https://docs.docker.com/compose/),
   [GitHub Actions](https://github.com/features/actions)
@@ -21,22 +21,17 @@ This is the API for viewing the booking status of rooms.
 
 ### Set up for development
 
-1. Install [Python 3.12+](https://www.python.org/downloads/), Install [Poetry](https://python-poetry.org/docs/)
-2. Install project dependencies with [Poetry](https://python-poetry.org/docs/cli/#options-2).
+1. Install [uv](https://docs.astral.sh/uv/) and [Docker](https://docs.docker.com/engine/install/)
+2. Install dependencies:
    ```bash
-   poetry install
+   uv sync
    ```
-3. Copy `settings.example.yaml` to `settings.yaml`
+3. Start development server (and read logs in the terminal):
    ```bash
-   cp settings.example.yaml settings.yaml
+   uv run -m src.api --reload
    ```
-4. Get credentials for EWS/Exchange.asmx and My University API, set them in `settings.yaml`
-5. Start development server:
-   ```bash
-   poetry run python -m src.api --reload
-   ```
-   > Follow provided instructions if needed
-6. Open in the browser: http://localhost:8000
+   > Follow the provided instructions (if needed).
+4. Open in the browser: http://localhost:8008
    > The api will be reloaded when you edit the code
 
 > [!IMPORTANT]
@@ -46,26 +41,47 @@ This is the API for viewing the booking status of rooms.
 > Edit `settings.yaml` according to your needs, you can view schema in
 > [config_schema.py](src/config_schema.py) and in [settings.schema.yaml](settings.schema.yaml)
 
+**Set up PyCharm integrations**
+
+1. Run configurations ([docs](https://www.jetbrains.com/help/pycharm/run-debug-configuration.html#createExplicitly)).
+   Right-click the `__main__.py` file in the project explorer, select `Run '__main__'` from the context menu.
+2. Ruff ([plugin](https://plugins.jetbrains.com/plugin/20574-ruff)).
+   It will lint and format your code. Make sure to enable `Use ruff format` option in plugin settings.
+3. Pydantic ([plugin](https://plugins.jetbrains.com/plugin/12861-pydantic)). It will fix PyCharm issues with
+   type-hinting.
+4. Conventional commits ([plugin](https://plugins.jetbrains.com/plugin/13389-conventional-commit)). It will help you
+   to write [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/).
+
 ### Deployment
 
 We use Docker with Docker Compose plugin to run the service on servers.
 
-1. Copy the file with settings: `cp settings.example.yaml settings.yaml`
-2. Change settings in the `settings.yaml` file according to your needs
+1. Copy the file with environment variables: `cp .example.env .env`
+2. Change environment variables in the `.env` file
+3. Copy the file with settings: `cp settings.example.yaml settings.yaml`
+4. Change settings in the `settings.yaml` file according to your needs
    (check [settings.schema.yaml](settings.schema.yaml) for more info)
-3. Install Docker with Docker Compose
-4. Build a Docker image: `docker compose build --pull`
-5. Run the container: `docker compose up --detach`
-6. Check the logs: `docker compose logs -f`
+5. Install Docker with Docker Compose
+6. Run the containers: `docker compose up --build --wait`
+7. Check the logs: `docker compose logs -f`
 
-# How to update dependencies
+## FAQ
 
-## Project dependencies
+### Be up to date with the template!
 
-1. Run `poetry update` to update all dependencies
-2. Run `poetry show --outdated` to check for outdated dependencies
-3. Run `poetry add <package>@latest` to add a new dependency if needed
+Check https://github.com/one-zero-eight/fastapi-template for updates once in a while.
 
-## Pre-commit hooks
+### How to update dependencies
 
-1. Run `poetry run pre-commit autoupdate`
+1. Run `uv sync --upgrade` to update uv.lock file and install the latest versions of the dependencies.
+2. Run `uv tree --outdated --depth=1` will show what package versions are installed and what are the latest versions.
+3. Run `uv run pre-commit autoupdate`
+
+Also, Dependabot will help you to keep your dependencies up-to-date, see [dependabot.yaml](.github/dependabot.yaml).
+
+## Contributing
+
+We are open to contributions of any kind.
+You can help us with code, bugs, design, documentation, media, new ideas, etc.
+If you are interested in contributing, please read
+our [contribution guide](https://github.com/one-zero-eight/.github/blob/main/CONTRIBUTING.md).
