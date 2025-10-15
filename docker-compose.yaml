@@ -1,8 +1,13 @@
+# This is a Docker Compose configuration for local use.
+
+# Run all services:
+# docker compose up --build --wait
+
 services:
   api:
     build: .
-    volumes:
-      - "./settings.yaml:/code/settings.yaml:ro" # Read-only settings file
-    restart: always
+    restart: no
     ports:
-      - "8000:8000"
+      - "8008:8000"
+    volumes:
+      - "./settings.yaml:/app/settings.yaml:ro" # Read-only settings file

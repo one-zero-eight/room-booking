@@ -122,6 +122,7 @@ extended_args = [
     "--use-colors",
     "--proxy-headers",
     "--forwarded-allow-ips=*",
+    "--port=8008",
     *args,
 ]
 

@@ -5,7 +5,6 @@ Lists of bookings for rooms.
 __all__ = ["router"]
 
 import datetime
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
@@ -21,8 +20,8 @@ router = APIRouter(tags=["Bookings"])
 @router.get("/bookings/")
 async def bookings(
     _: VerifiedDep,
-    room_id: Optional[str] = Query(None, title="ID for getting single room bookings"),
-    room_ids: Optional[list[str]] = Query(None, title="IDs for multiple rooms bookings"),
+    room_id: str | None = Query(None, title="ID for getting single room bookings"),
+    room_ids: list[str] | None = Query(None, title="IDs for multiple rooms bookings"),
     start: datetime.datetime = Query(..., description="Start date"),
     end: datetime.datetime = Query(..., description="End date"),
     include_red: bool = Query(False, description="Include red-access rooms bookings when getting all"),
