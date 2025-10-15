@@ -18,10 +18,10 @@ ACCOUNTS_TOKEN_URL = "https://api.innohassle.ru/accounts/v0/tokens/generate-serv
 
 def ensure_settings_file():
     """
-    Ensure `settings.yaml` exists. If not, copy `settings.yaml.example`.
+    Ensure `settings.yaml` exists. If not, copy `settings.example.yaml`.
     """
     if not SETTINGS_TEMPLATE.exists():
-        print("❌ No `settings.yaml.example` found. Skipping copying.")
+        print("❌ No `settings.example.yaml` found. Skipping copying.")
         return
 
     if SETTINGS_FILE.exists():
