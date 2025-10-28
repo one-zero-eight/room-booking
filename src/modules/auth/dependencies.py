@@ -8,7 +8,7 @@ from src.modules.tokens.repository import TokenRepository, UserTokenData
 
 bearer_scheme = HTTPBearer(
     scheme_name="Bearer",
-    description="Token from [InNoHassle Accounts](https://api.innohassle.ru/accounts/v0/tokens/generate-my-token)",
+    description="Token from [InNoHassle Accounts](https://innohassle.ru/account/token)",
     bearerFormat="JWT",
     auto_error=False,  # We'll handle error manually
 )
