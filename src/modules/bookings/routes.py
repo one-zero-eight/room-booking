@@ -6,6 +6,7 @@ __all__ = ["router"]
 
 import datetime
 
+import httpx
 from fastapi import APIRouter, HTTPException, Query
 
 from src.api.dependencies import ApiKeyDep, VerifiedDep
@@ -108,7 +109,13 @@ async def delete_booking(user: VerifiedDep, booking_id: int) -> bool:
 
 @router.get("/bookings/{user_id}")
 async def get_user_booking(user_id: str, _: ApiKeyDep) -> list[MyUniBooking]:
-    user = await innohassle_accounts.get_user_by_id(user_id)
+    try:
+        user = await innohassle_accounts.get_user_by_id(user_id)
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(e.response.status_code, e.response.json())
+
+    if user is None:
+        raise HTTPException(404, "User not found")
 
     # Get the bookings from My University
     bookings, error_message = await my_uni_booking_repository.list_user_bookings(user.innopolis_sso.email)
