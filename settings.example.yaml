@@ -1,6 +1,7 @@
 $schema: "./settings.schema.yaml"
 # ---------- Application settings ----- #
 environment: development
+api_key: null
 
 accounts:
   # Get from https://api.innohassle.ru/accounts/v0/tokens/generate-service-token?sub=room-booking-local-dev&scopes=users&only_for_me=true
