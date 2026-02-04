@@ -73,6 +73,8 @@ class Settings(SettingBaseModel):
     "App environment flag"
     app_root_path: str = ""
     'Prefix for the API path (e.g. "/api/v0")'
+    api_key: SecretStr
+    "Secret key for accessing API by external services"
     rooms: list[Room] = []
     "List of rooms"
     ics_cache_ttl_seconds: int = 60

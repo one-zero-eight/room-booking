@@ -1,9 +1,10 @@
-__all__ = ["verify_user"]
+__all__ = ["api_key_dep", "verify_user"]
 
 from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from src.api.exceptions import IncorrectCredentialsException
+from src.config import settings
 from src.modules.tokens.repository import TokenRepository, UserTokenData
 
 bearer_scheme = HTTPBearer(
@@ -23,3 +24,14 @@ async def verify_user(
 
     token_data = await TokenRepository.verify_user_token(token, IncorrectCredentialsException())
     return token_data
+
+
+def api_key_dep(
+    bearer: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+) -> str:
+    token = bearer and bearer.credentials
+    if not token:
+        raise IncorrectCredentialsException(no_credentials=True)
+    if token != settings.api_key.get_secret_value():
+        raise IncorrectCredentialsException(no_credentials=False)
+    return token

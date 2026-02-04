@@ -1,4 +1,5 @@
 import os
+import secrets
 import shutil
 import subprocess
 import sys
@@ -98,20 +99,50 @@ def ensure_pre_commit_hooks():
 
     try:
         subprocess.run(
-            ["poetry", "run", "pre-commit", "install", "--install-hooks", "-t", "pre-commit", "-t", "commit-msg"],
+            ["uv", "run", "pre-commit", "install", "--install-hooks", "-t", "pre-commit", "-t", "commit-msg"],
             check=True,
             text=True,
         )
         print("✅ Pre-commit hooks installed successfully.")
     except subprocess.CalledProcessError as e:
         print(
-            f"❌ Error setting up pre-commit hooks:\n{e.stderr}\nPlease, setup it manually with `poetry run pre-commit install --install-hooks -t pre-commit -t commit-msg`"
+            f"❌ Error setting up pre-commit hooks:\n{e.stderr}\nPlease, setup it manually with `uv run pre-commit install --install-hooks -t pre-commit -t commit-msg`"
         )
+
+
+def check_and_generate_api_key():
+    """
+    Check if `api_key` is set in `settings.yaml`.
+    """
+    if not SETTINGS_FILE.exists():
+        print("❌ No `settings.yaml` found. Skipping api token check.")
+        return
+
+    try:
+        with open(SETTINGS_FILE) as f:
+            settings = yaml.safe_load(f) or {}
+    except Exception as e:
+        print(f"❌ Error reading `settings.yaml`: {e}")
+        return
+
+    api_key = settings.get("api_key")
+
+    if not api_key or api_key == "...":
+        print("⚠️ `api_key` is missing in `settings.yaml`. Generating a new one.")
+        api_key = secrets.token_hex(32)
+        with open(SETTINGS_FILE) as f:
+            as_text = f.read()
+        as_text = as_text.replace("api_key: null", f"api_key: {api_key}")
+        as_text = as_text.replace("api_key: ...", f"api_key: {api_key}")
+        with open(SETTINGS_FILE, "w") as f:
+            f.write(as_text)
+        print("  ✅ `api_key` has been updated in `settings.yaml`.")
 
 
 ensure_settings_file()
 ensure_pre_commit_hooks()
 check_and_prompt_api_jwt_token()
+check_and_generate_api_key()
 
 import uvicorn  # noqa: E402
 

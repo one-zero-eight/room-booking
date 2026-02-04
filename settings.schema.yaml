@@ -143,6 +143,12 @@ properties:
     description: Prefix for the API path (e.g. "/api/v0")
     title: App Root Path
     type: string
+  api_key:
+    description: Secret key for accessing API by external services
+    format: password
+    title: Api Key
+    type: string
+    writeOnly: true
   rooms:
     default: []
     description: List of rooms
@@ -168,6 +174,7 @@ properties:
   exchange:
     $ref: '#/$defs/Exchange'
 required:
+- api_key
 - accounts
 - my_uni
 - exchange

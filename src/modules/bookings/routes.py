@@ -8,10 +8,11 @@ import datetime
 
 from fastapi import APIRouter, HTTPException, Query
 
-from src.api.dependencies import VerifiedDep
+from src.api.dependencies import ApiKeyDep, VerifiedDep
 from src.api.exceptions import ObjectNotFound
 from src.modules.bookings.exchange_repository import Booking, exchange_booking_repository
 from src.modules.bookings.my_uni_repository import MyUniBooking, my_uni_booking_repository
+from src.modules.innohassle_accounts import innohassle_accounts
 from src.modules.rooms.repository import room_repository
 
 router = APIRouter(tags=["Bookings"])
@@ -103,3 +104,16 @@ async def delete_booking(user: VerifiedDep, booking_id: int) -> bool:
 
     # Success
     return True
+
+
+@router.get("/bookings/{user_id}")
+async def get_user_booking(user_id: str, _: ApiKeyDep) -> list[MyUniBooking]:
+    user = await innohassle_accounts.get_user_by_id(user_id)
+
+    # Get the bookings from My University
+    bookings, error_message = await my_uni_booking_repository.list_user_bookings(user.innopolis_sso.email)
+    if bookings is None:
+        raise ValueError(error_message)
+
+    # Return the bookings
+    return bookings
