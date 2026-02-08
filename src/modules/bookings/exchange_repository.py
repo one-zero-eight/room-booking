@@ -91,6 +91,81 @@ class ExchangeBookingRepository:
         to_dt = to_msk(to_dt)
         return self.fetch_bookings(room_ids, from_dt, to_dt)
 
+    def create_booking(
+        self,
+        room_id: str,
+        start: datetime.datetime,
+        end: datetime.datetime,
+        title: str,
+        organizer_email: str,
+        participant_emails: list[str],
+    ):
+        room = room_repository.get_by_id(room_id)
+        start = to_msk(start)
+        end = to_msk(end)
+        item = exchangelib.CalendarItem(
+            account=self.account,
+            folder=self.account.calendar,
+            start=start,
+            end=end,
+            subject=title,
+            body=f"Booking on request from {organizer_email}\nProvider: https://innohassle.ru/room-booking",
+            location=f"{room.title}",
+            resources=[
+                room.resource_email,
+            ],
+            required_attendees=[
+                room.resource_email,
+                organizer_email,
+                *participant_emails,
+            ],
+        )
+        item.save(send_meeting_invitations=exchangelib.items.SEND_TO_ALL_AND_SAVE_COPY)
+        print(item)
+        return item.id
+
+    def get_booking(self, item_id: str):
+        item: exchangelib.CalendarItem = self.account.calendar.get(
+            id=item_id
+        )  # may raise exchangelib.errors.ErrorItemNotFound
+        print(item)
+        return item
+
+    def update_booking(
+        self,
+        item_id: str,
+        new_start: datetime.datetime | None = None,
+        new_end: datetime.datetime | None = None,
+        new_title: str | None = None,
+    ):
+        item: exchangelib.CalendarItem = self.account.calendar.get(
+            id=item_id
+        )  # may raise exchangelib.errors.ErrorItemNotFound
+        print(item)
+
+        update_fields = []
+        if new_start is not None:
+            item.start = new_start
+            update_fields.append("start")
+        if new_end is not None:
+            item.end = new_end
+            update_fields.append("end")
+        if new_title is not None:
+            item.subject = new_title
+            update_fields.append("subject")
+
+        if update_fields:
+            item.save(update_fields=update_fields, send_meeting_invitations=exchangelib.items.SEND_TO_ALL_AND_SAVE_COPY)
+            print(item)
+
+    def delete_booking(self, item_id: str) -> bool:
+        try:
+            item: exchangelib.CalendarItem = self.account.calendar.get(id=item_id)
+        except exchangelib.errors.ErrorItemNotFound:
+            return True
+        item.cancel(new_body="Canceled from https://innohassle.ru/room-booking")
+        return True
+
 
 _timezone = pytz.timezone("Europe/Moscow")
 
