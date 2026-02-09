@@ -1,0 +1,114 @@
+import datetime
+from typing import Literal
+
+from src.modules.bookings.exchange_repository import to_msk
+from src.modules.inh_accounts_sdk import UserInfoFromSSO
+from src.modules.rooms.repository import Room
+
+type Role = Literal["none", "student", "staff"]
+
+
+def can_book(
+    *, user: UserInfoFromSSO, room: Room, start: datetime.datetime, end: datetime.datetime
+) -> tuple[bool, str]:
+    start = to_msk(start)
+    end = to_msk(end)
+
+    if start >= end:
+        return False, "Start must be before end"
+
+    in_access_list = False  # TODO: Check access lists
+    booking_longer_than_3_hours = end - start > datetime.timedelta(hours=3)
+
+    highest_role: Role = "none"
+    if user.is_student:
+        highest_role = "student"
+    if user.is_staff:
+        highest_role = "staff"
+
+    return _check_rules(
+        room=room,
+        booking_longer_than_3_hours=booking_longer_than_3_hours,
+        highest_role=highest_role,
+        in_access_list=in_access_list,
+        non_restricted_time=_is_restricted_time(start=start, end=end),
+    )
+
+
+def _is_restricted_time(*, start: datetime.datetime, end: datetime.datetime):
+    """
+    This function assumes that booking duration is less than 3 hours. Otherwise, returned flag may be wrong.
+    """
+    start = to_msk(start)
+    end = to_msk(end)
+
+    restricted_time_start = datetime.time(hour=8)
+    restricted_time_end = datetime.time(hour=19)
+    started_on_weekday = 0 <= start.date().weekday() <= 4
+    ended_on_weekday = 0 <= end.date().weekday() <= 4
+
+    if start.date() == end.date():
+        if started_on_weekday:
+            if start.time() <= end.time() <= restricted_time_start:
+                return False
+            if restricted_time_end <= start.time() <= end.time():
+                return False
+        else:
+            return False
+    else:
+        if (not started_on_weekday or restricted_time_end <= start.time()) and (
+            not ended_on_weekday or end.time() <= restricted_time_start
+        ):
+            return False
+    return True
+
+
+def _check_rules(
+    *,
+    room: Room,
+    booking_longer_than_3_hours: bool,
+    highest_role: Role,
+    in_access_list: bool,
+    non_restricted_time: bool,
+):  # TODO: test cases
+    # Только staff и students имеют доступ к бронированию
+    if highest_role == "none":
+        return False, "You can't book rooms"
+
+    if room.id == "309a" and in_access_list and booking_longer_than_3_hours:
+        return False, "309a can't be booked for more than 3 hours"
+
+    # staff всегда имеет доступ к жёлтым и красным комнатам
+    if highest_role == "staff" and room.access_level in ["yellow", "red"]:
+        return True, ""
+
+    if highest_role == "staff" and in_access_list:
+        return True, ""
+
+    if highest_role == "staff":
+        return False, "You can't book this room"
+
+    # Студенты не могут бронировать комнаты больше чем на 3 часа
+    if highest_role == "student" and booking_longer_than_3_hours:
+        if in_access_list:
+            return True, ""
+
+        if room.access_level == "yellow":
+            return False, "Students can't create booking for more than 3 hours"
+
+    if in_access_list:
+        return True, ""
+
+    if highest_role == "student" and room.access_level == "red":
+        return False, "Students can't book rooms with red access_level"
+
+    if room.access_level == "yellow" and not room.restrict_daytime:
+        return True, ""
+
+    if room.access_level == "yellow" and room.restrict_daytime:
+        if non_restricted_time:
+            return True, ""
+        else:
+            return False, "Students can't book lecture rooms during working hours"
+
+    return False, "You can't book this room"

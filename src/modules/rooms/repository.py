@@ -11,7 +11,6 @@ class RoomsRepository:
     def __init__(self, rooms: list[Room]):
         self.rooms = rooms
         self.room_by_id = {room.id: room for room in self.rooms}
-        self.room_by_my_uni_id = {room.my_uni_id: room for room in self.rooms}
         self.room_by_email = {room.resource_email: room for room in self.rooms}
 
     def get_all(self, include_red: bool = False) -> list[Room]:
@@ -25,6 +24,9 @@ class RoomsRepository:
 
     def get_by_my_uni_id(self, my_uni_room_id: int) -> Room | None:
         return self.room_by_my_uni_id.get(my_uni_room_id)
+
+    def get_by_email(self, email: str) -> Room | None:
+        return self.room_by_email.get(email)
 
 
 room_repository: RoomsRepository = RoomsRepository(settings.rooms)
