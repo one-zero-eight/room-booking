@@ -160,9 +160,8 @@ class ExchangeBookingRepository:
                 room_id_x_calendar_events = await task
             else:
                 existing_args, existing_task = self._account_protocol_get_free_busy_info_task
-                use_existing_task = (existing_args == args) and (use_cache or not existing_task.done())
 
-                if use_existing_task:
+                if existing_args == args and not existing_task.done():
                     logger.info(
                         f"Deduplicate calendar items for same time range, so we will use existing task: {args=}"
                     )
@@ -268,9 +267,8 @@ class ExchangeBookingRepository:
                 calendar_items = await task
             else:
                 existing_args, existing_task = self._account_calendar_view_task
-                use_existing_task = (existing_args == args) and (use_cache or not existing_task.done())
 
-                if use_existing_task:
+                if existing_args == args and not existing_task.done():
                     logger.info(
                         f"Deduplicate calendar items for same time range, so we will use existing task: {args=}"
                     )
