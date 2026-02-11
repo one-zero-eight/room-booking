@@ -3,11 +3,20 @@ from collections.abc import Iterable
 from typing import cast
 
 import exchangelib
+import pytz
 from exchangelib import CalendarItem
 
 from src.config_schema import Room
-from src.modules.bookings.exchange_repository import Booking
+from src.modules.bookings.schemas import Attendee, Booking, BookingStatus
 from src.modules.rooms.repository import room_repository
+
+_msk_timezone = pytz.timezone("Europe/Moscow")
+
+
+def to_msk(dt: datetime.datetime) -> datetime.datetime:
+    if isinstance(dt, exchangelib.EWSDateTime):
+        return dt.astimezone(exchangelib.EWSTimeZone.from_pytz(_msk_timezone))
+    return dt.astimezone(_msk_timezone)
 
 
 def get_emails_to_attendees_index(calendar_item: CalendarItem) -> dict[str, exchangelib.Attendee]:
@@ -57,8 +66,15 @@ def calendar_item_to_booking(calendar_item: CalendarItem, room_id: str | None = 
     return Booking(
         room_id=room.id,
         title=cast(str, calendar_item.subject) or "Busy",
-        start=cast(datetime.datetime, calendar_item.start),
-        end=cast(datetime.datetime, calendar_item.end),
+        start=to_msk(cast(datetime.datetime, calendar_item.start)),
+        end=to_msk(cast(datetime.datetime, calendar_item.end)),
         outlook_booking_id=str(calendar_item.id),
-        emails=[email for email in email_index.keys() if not room_repository.get_by_email(email)],
+        attendees=[
+            Attendee(
+                email=email,
+                status=cast(BookingStatus | None, attendee.response_type),
+                assosiated_room_id=room.id if (room := room_repository.get_by_email(email)) is not None else None,
+            )
+            for email, attendee in email_index.items()
+        ],
     )
