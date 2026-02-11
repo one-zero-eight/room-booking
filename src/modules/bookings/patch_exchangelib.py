@@ -25,7 +25,7 @@ def build_curl_options(self):
     # Let curl handle the POSTFIELDS instead of using READFUNCTION
     curl_options.update(
         {
-            pycurl.POSTFIELDS: curl_options[pycurl.READFUNCTION]().decode(),
+            pycurl.POSTFIELDS: curl_options[pycurl.READFUNCTION](),
         }
     )
     curl_options.pop(pycurl.READFUNCTION)
