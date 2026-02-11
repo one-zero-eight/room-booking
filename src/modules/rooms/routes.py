@@ -48,4 +48,4 @@ async def room_bookings_route(
     obj = room_repository.get_by_id(id)
     if obj is None:
         raise HTTPException(404, "Room not found")
-    return exchange_booking_repository.get_booking_for_room(room_id=id, from_dt=start, to_dt=end)
+    return await exchange_booking_repository.get_booking_for_room(room_id=id, from_dt=start, to_dt=end)
