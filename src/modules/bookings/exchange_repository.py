@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+import time
 from collections import defaultdict
 from collections.abc import Iterable
 from typing import TypedDict, cast
@@ -60,8 +61,14 @@ class ExchangeBookingRepository:
 
     async def get_server_status(self) -> dict | None:
         try:
+            t1 = time.monotonic()
+            status = {}
+            status["version"] = str(self.account.version)
             calendar_folder_info = await asyncio.to_thread(lambda: self.account.calendar)
-            return {"version": str(self.account.version), "folder": str(calendar_folder_info)}
+            status["folder"] = str(calendar_folder_info)
+            t2 = time.monotonic()
+            status["time_taken"] = f"{t2 - t1:.2f} seconds"
+            return status
         except Exception as e:
             logger.error(f"Error getting calendar folder info: {e}")
             return None
