@@ -192,7 +192,7 @@ async def update_booking(
     outlook_booking_id: str,
     user: VerifiedDep,
     request: PatchBookingRequest,
-):
+) -> Booking:
     booking = await exchange_booking_repository.get_booking(item_id=outlook_booking_id)
     if booking is None:
         raise HTTPException(404, "Booking not found")
@@ -222,12 +222,17 @@ async def update_booking(
     if not can:
         raise HTTPException(403, why)
 
-    return await exchange_booking_repository.update_booking(
+    booking = await exchange_booking_repository.update_booking(
         item_id=outlook_booking_id,
         new_start=request.start,
         new_end=request.end,
         new_title=request.title,
     )
+
+    if booking is None:
+        raise HTTPException(404, "Booking not found after update")
+
+    return booking
 
 
 @router.delete(
