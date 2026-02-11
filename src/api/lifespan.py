@@ -4,11 +4,11 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from src.modules.innohassle_accounts import innohassle_accounts
+from src.modules.inh_accounts_sdk import inh_accounts
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     # Application startup
-    await innohassle_accounts.update_key_set()
+    await inh_accounts.update_key_set()
     yield

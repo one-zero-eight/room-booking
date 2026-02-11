@@ -12,9 +12,12 @@ import httpx
 from fastapi import APIRouter, HTTPException, Query
 
 from src.api.dependencies import ApiKeyDep, VerifiedDep
-from src.modules.bookings.booking_status_daemon import create_or_get_booking_status_daemon
 from src.modules.bookings.exchange_repository import exchange_booking_repository
-from src.modules.bookings.schemas import Booking, BookingStatusModel, CreateBookingResponse
+from src.modules.bookings.schemas import (
+    Booking,
+    CreateBookingRequest,
+    PatchBookingRequest,
+)
 from src.modules.bookings.service import (
     calendar_item_to_booking,
     get_emails_to_attendees_index,
@@ -73,7 +76,14 @@ async def bookings(
 
 
 @router.get("/bookings/my")
-async def my_bookings(user: VerifiedDep, start: datetime.datetime, end: datetime.datetime) -> list[Booking]:
+async def my_bookings(
+    user: VerifiedDep, start: datetime.datetime | None = None, end: datetime.datetime | None = None
+) -> list[Booking]:
+    if start is None:
+        start = datetime.datetime.now() - datetime.timedelta(days=7)
+    if end is None:
+        end = datetime.datetime.now() + datetime.timedelta(days=30)
+
     return await asyncio.to_thread(
         exchange_booking_repository.fetch_user_bookings, attendee_email=user.email, start=start, end=end
     )
@@ -82,13 +92,9 @@ async def my_bookings(user: VerifiedDep, start: datetime.datetime, end: datetime
 @router.post("/bookings/")
 async def create_booking(
     user: VerifiedDep,
-    room_id: str,
-    title: str,
-    start: datetime.datetime,
-    end: datetime.datetime,
-    participant_emails: list[str],
-) -> CreateBookingResponse:
-    room = room_repository.get_by_id(room_id)
+    request: CreateBookingRequest,
+) -> Booking:
+    room = room_repository.get_by_id(room_id=request.room_id)
     if room is None:
         raise HTTPException(404, "Room not found")
 
@@ -99,37 +105,41 @@ async def create_booking(
     if innohassle_user is None or innohassle_user.innopolis_sso is None:
         raise HTTPException(401, "Invalid user")
 
-    can, why = can_book(user=innohassle_user.innopolis_sso, room=room, start=start, end=end)
+    can, why = can_book(user=innohassle_user.innopolis_sso, room=room, start=request.start, end=request.end)
     if not can:
         raise HTTPException(403, why)
 
     item_id = await asyncio.to_thread(
         exchange_booking_repository.create_booking,
         room=room,
-        start=start,
-        end=end,
-        title=title,
+        start=request.start,
+        end=request.end,
+        title=request.title,
         organizer_email=user.email,
-        participant_emails=participant_emails,
+        participant_emails=request.participant_emails or [],
     )
 
-    create_or_get_booking_status_daemon(item_id, room.resource_email)
-    return CreateBookingResponse(outlook_booking_id=item_id)
+    await asyncio.sleep(5)
+    # NOTE: Assuming that rooms answers in 5 seconds
+    # TODO: Rooms, that don't answer automatically, should be handled individually
 
+    item = await asyncio.to_thread(exchange_booking_repository.get_booking, item_id=item_id)
 
-@router.get("/bookings/{outlook_booking_id}/long-polling")
-async def long_polling(outlook_booking_id: str, room_id: str, _: VerifiedDep) -> BookingStatusModel:
-    room = room_repository.get_by_id(room_id)
-    if room is None:
-        raise HTTPException(404, "Room not found")
+    if item is None:
+        raise HTTPException(404, "Booking was removed during booking")
 
-    status = await create_or_get_booking_status_daemon(
-        item_id=outlook_booking_id, room_email_address=room.resource_email
-    )
-    if status is None:
-        raise HTTPException(404, "Booking not found")
+    email_index = get_emails_to_attendees_index(item)
+    room_attendee = email_index.get(room.resource_email)
 
-    return status
+    if room_attendee is None or room_attendee.response_type == "Decline":
+        raise HTTPException(403, "Booking was declined by the room")
+
+    booking = calendar_item_to_booking(item)
+
+    if booking is None:
+        raise HTTPException(404, "Room attendee not found in booking attendees")
+
+    return booking
 
 
 @router.get("/bookings/{outlook_booking_id}")
@@ -148,9 +158,7 @@ async def get_booking(outlook_booking_id: str, _: VerifiedDep) -> Booking:
 async def update_booking(
     outlook_booking_id: str,
     user: VerifiedDep,
-    start: datetime.datetime | None = None,
-    end: datetime.datetime | None = None,
-    title: str | None = None,
+    request: PatchBookingRequest,
 ):
     booking = await asyncio.to_thread(exchange_booking_repository.get_booking, item_id=outlook_booking_id)
     if booking is None:
@@ -175,25 +183,25 @@ async def update_booking(
     can, why = can_book(
         user=innohassle_user.innopolis_sso,
         room=room,
-        start=cast(datetime.datetime, start or booking.start),
-        end=cast(datetime.datetime, end or booking.end),
+        start=cast(datetime.datetime, request.start or booking.start),
+        end=cast(datetime.datetime, request.end or booking.end),
     )
     if not can:
         raise HTTPException(403, why)
 
     return await exchange_booking_repository.update_booking(
         item_id=outlook_booking_id,
-        new_start=start,
-        new_end=end,
-        new_title=title,
+        new_start=request.start,
+        new_end=request.end,
+        new_title=request.title,
     )
 
 
 @router.delete(
     "/bookings/{outlook_booking_id}",
-    status_code=204,
+    status_code=200,
     responses={
-        204: {"description": "Deleted successfully"},
+        200: {"description": "Deleted successfully"},
     },
 )
 async def delete_booking(user: VerifiedDep, outlook_booking_id: str):

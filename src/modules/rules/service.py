@@ -31,7 +31,7 @@ def can_book(
         booking_longer_than_3_hours=booking_longer_than_3_hours,
         highest_role=highest_role,
         in_access_list=in_access_list,
-        non_restricted_time=_is_restricted_time(start=start, end=end),
+        is_restricted_time=_is_restricted_time(start=start, end=end),
     )
 
 
@@ -69,7 +69,7 @@ def _check_rules(
     booking_longer_than_3_hours: bool,
     highest_role: Role,
     in_access_list: bool,
-    non_restricted_time: bool,
+    is_restricted_time: bool,
 ):  # TODO: test cases
     # Только staff и students имеют доступ к бронированию
     if highest_role == "none":
@@ -106,9 +106,9 @@ def _check_rules(
         return True, ""
 
     if room.access_level == "yellow" and room.restrict_daytime:
-        if non_restricted_time:
-            return True, ""
-        else:
+        if is_restricted_time:
             return False, "Students can't book lecture rooms during working hours"
+        else:
+            return True, ""
 
     return False, "You can't book this room"

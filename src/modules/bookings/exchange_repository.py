@@ -4,7 +4,6 @@ from collections import defaultdict
 
 import exchangelib
 import exchangelib.errors
-import pytz
 
 import src.modules.bookings.patch_exchangelib  # noqa
 from src.config import settings
@@ -15,6 +14,7 @@ from src.modules.bookings.service import (
     get_emails_to_attendees_index,
     get_first_room_attendee_from_emails,
     get_fisrt_room_from_emails,
+    to_msk,
 )
 from src.modules.rooms.repository import room_repository
 
@@ -54,7 +54,7 @@ class ExchangeBookingRepository:
                 merged_free_busy_interval=5,
             )
         ):
-            if busy_info is None or busy_info.calendar_items is None:
+            if busy_info is None or busy_info.calendar_events is None:
                 continue
 
             for calendar_event in busy_info.calendar_events:
@@ -65,7 +65,7 @@ class ExchangeBookingRepository:
                         start=calendar_event.start,
                         end=calendar_event.end,
                         outlook_booking_id=None,
-                        emails=[],  # if you change it, ensure emails properly merged in fetch_bookings_all()
+                        attendees=None,  # busy info doesn't contain attendees info, we can fetch it from account calendar if needed
                     )
                 )
         return bookings
@@ -107,6 +107,8 @@ class ExchangeBookingRepository:
             start=exchangelib.EWSDateTime.from_datetime(start), end=exchangelib.EWSDateTime.from_datetime(end)
         )
 
+        rooms_ids = {room.id for room in rooms}
+
         bookings: list[Booking] = []
         for item in calendar_items:
             email_index = get_emails_to_attendees_index(item)
@@ -115,7 +117,7 @@ class ExchangeBookingRepository:
             if room is None:
                 continue
 
-            if room.id not in rooms:
+            if room.id not in rooms_ids:
                 continue
 
             room_attendee = email_index.get(room.resource_email)
@@ -153,8 +155,8 @@ class ExchangeBookingRepository:
         bookings = []
 
         for key in set(account_calendar_registry.keys()) | set(busy_info_registry.keys()):
-            ac_bookings = account_calendar_registry[key]
-            bi_bookings = busy_info_registry[key]
+            ac_bookings: list = account_calendar_registry[key]
+            bi_bookings: list = busy_info_registry[key]
             conflicting_bookings_len = len(ac_bookings) + len(bi_bookings)
 
             # TODO: properly handle two sources of truth
@@ -298,13 +300,6 @@ class ExchangeBookingRepository:
         ]
 
         return conversation
-
-
-_timezone = pytz.timezone("Europe/Moscow")
-
-
-def to_msk(dt: datetime.datetime) -> datetime.datetime:
-    return dt.astimezone(_timezone)
 
 
 exchange_booking_repository = ExchangeBookingRepository(
