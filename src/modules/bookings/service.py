@@ -31,7 +31,7 @@ def get_emails_to_attendees_index(calendar_item: CalendarItem) -> dict[str, exch
     return emails
 
 
-def get_fisrt_room_from_emails(emails: Iterable[str]) -> Room | None:
+def get_first_room_from_emails(emails: Iterable[str]) -> Room | None:
     for email in emails:
         if room := room_repository.get_by_email(email):
             return room
@@ -48,7 +48,7 @@ def get_first_room_attendee_from_emails(email_index: dict[str, exchangelib.Atten
 def calendar_item_to_booking(calendar_item: CalendarItem, room_id: str | None = None) -> Booking | None:
     email_index = get_emails_to_attendees_index(calendar_item=calendar_item)
     if room_id is None:
-        room = get_fisrt_room_from_emails(emails=email_index.keys())
+        room = get_first_room_from_emails(emails=email_index.keys())
 
         if room is None:
             return None

@@ -156,10 +156,15 @@ properties:
       $ref: '#/$defs/Room'
     title: Rooms
     type: array
-  ics_cache_ttl_seconds:
+  ttl_bookings_from_account_calendar:
     default: 60
-    description: TTL for the ICS cache in seconds
-    title: Ics Cache Ttl Seconds
+    description: TTL for the bookings from account calendar cache in seconds
+    title: Ttl Bookings From Account Calendar
+    type: integer
+  ttl_bookings_from_busy_info:
+    default: 60
+    description: TTL for the bookings from busy info cache in seconds
+    title: Ttl Bookings From Busy Info
     type: integer
   cors_allow_origin_regex:
     default: .*

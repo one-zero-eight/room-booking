@@ -21,11 +21,24 @@ from src.modules.bookings.schemas import (
 from src.modules.bookings.service import (
     calendar_item_to_booking,
     get_emails_to_attendees_index,
-    get_fisrt_room_from_emails,
+    get_first_room_from_emails,
 )
 from src.modules.inh_accounts_sdk import inh_accounts
 from src.modules.rooms.repository import room_repository
 from src.modules.rules.service import can_book
+
+
+def _default_date_range(
+    start: datetime.datetime | None,
+    end: datetime.datetime | None,
+) -> tuple[datetime.datetime, datetime.datetime]:
+    today = datetime.datetime.combine(datetime.date.today(), datetime.time.min)
+    if start is None:
+        start = today - datetime.timedelta(days=7)
+    if end is None:
+        end = today + datetime.timedelta(days=14)
+    return start, end
+
 
 router = APIRouter(
     tags=["Bookings"],
@@ -41,8 +54,12 @@ async def bookings(
     _: VerifiedDep,
     room_id: str | None = Query(None, title="ID for getting single room bookings"),
     room_ids: list[str] | None = Query(None, title="IDs for multiple rooms bookings"),
-    start: datetime.datetime = Query(..., description="Start date"),
-    end: datetime.datetime = Query(..., description="End date"),
+    start: datetime.datetime | None = Query(
+        None, description="Start date, if not provided, will be set to 7 days before current date"
+    ),
+    end: datetime.datetime | None = Query(
+        None, description="End date, if not provided, will be set to 14 days after current date"
+    ),
     include_red: bool = Query(False, description="Include red-access rooms bookings when getting all"),
 ) -> list[Booking]:
     """
@@ -55,38 +72,47 @@ async def bookings(
 
     `include_red` only applies when getting all rooms and is `False` be default.
     """
+
+    start, end = _default_date_range(start, end)
+
     if room_ids and room_id and room_id not in room_ids:
         room_ids.append(room_id)
 
     if room_ids:
-        return await asyncio.to_thread(
-            exchange_booking_repository.get_bookings_for_certain_rooms, room_ids=room_ids, from_dt=start, to_dt=end
+        return await exchange_booking_repository.get_bookings_for_certain_rooms(
+            room_ids=room_ids,
+            from_dt=start,
+            to_dt=end,
         )
     if room_id:
         obj = room_repository.get_by_id(room_id)
         if obj is None:
             raise HTTPException(404, "Room not found")
-        return await asyncio.to_thread(
-            exchange_booking_repository.get_booking_for_room, room_id=room_id, from_dt=start, to_dt=end
+        return await exchange_booking_repository.get_booking_for_room(
+            room_id=room_id,
+            from_dt=start,
+            to_dt=end,
         )
     else:
-        return await asyncio.to_thread(
-            exchange_booking_repository.get_bookings_for_all_rooms, from_dt=start, to_dt=end, include_red=include_red
+        return await exchange_booking_repository.get_bookings_for_all_rooms(
+            from_dt=start,
+            to_dt=end,
+            include_red=include_red,
         )
 
 
 @router.get("/bookings/my")
 async def my_bookings(
-    user: VerifiedDep, start: datetime.datetime | None = None, end: datetime.datetime | None = None
+    user: VerifiedDep,
+    start: datetime.datetime | None = Query(
+        None, description="Start date, if not provided, will be set to 7 days before current date"
+    ),
+    end: datetime.datetime | None = Query(
+        None, description="End date, if not provided, will be set to 14 days after current date"
+    ),
 ) -> list[Booking]:
-    if start is None:
-        start = datetime.datetime.now() - datetime.timedelta(days=7)
-    if end is None:
-        end = datetime.datetime.now() + datetime.timedelta(days=30)
-
-    return await asyncio.to_thread(
-        exchange_booking_repository.fetch_user_bookings, attendee_email=user.email, start=start, end=end
-    )
+    start, end = _default_date_range(start, end)
+    return await exchange_booking_repository._fetch_user_bookings(attendee_email=user.email, start=start, end=end)
 
 
 @router.post("/bookings/")
@@ -109,8 +135,7 @@ async def create_booking(
     if not can:
         raise HTTPException(403, why)
 
-    item_id = await asyncio.to_thread(
-        exchange_booking_repository.create_booking,
+    item_id = await exchange_booking_repository.create_booking(
         room=room,
         start=request.start,
         end=request.end,
@@ -123,7 +148,7 @@ async def create_booking(
     # NOTE: Assuming that rooms answers in 5 seconds
     # TODO: Rooms, that don't answer automatically, should be handled individually
 
-    item = await asyncio.to_thread(exchange_booking_repository.get_booking, item_id=item_id)
+    item = await exchange_booking_repository.get_booking(item_id=item_id)
 
     if item is None:
         raise HTTPException(404, "Booking was removed during booking")
@@ -144,7 +169,7 @@ async def create_booking(
 
 @router.get("/bookings/{outlook_booking_id}")
 async def get_booking(outlook_booking_id: str, _: VerifiedDep) -> Booking:
-    calendar_item = await asyncio.to_thread(exchange_booking_repository.get_booking, outlook_booking_id)
+    calendar_item = await exchange_booking_repository.get_booking(outlook_booking_id)
     if calendar_item is None:
         raise HTTPException(404, "Booking not found")
 
@@ -160,12 +185,12 @@ async def update_booking(
     user: VerifiedDep,
     request: PatchBookingRequest,
 ):
-    booking = await asyncio.to_thread(exchange_booking_repository.get_booking, item_id=outlook_booking_id)
+    booking = await exchange_booking_repository.get_booking(item_id=outlook_booking_id)
     if booking is None:
         raise HTTPException(404, "Booking not found")
 
     email_index = get_emails_to_attendees_index(booking)
-    room = get_fisrt_room_from_emails(email_index.keys())
+    room = get_first_room_from_emails(email_index.keys())
 
     if user.email not in email_index:
         raise HTTPException(403, "You are not the participant of the booking")
@@ -205,20 +230,29 @@ async def update_booking(
     },
 )
 async def delete_booking(user: VerifiedDep, outlook_booking_id: str):
-    booking = await asyncio.to_thread(exchange_booking_repository.get_booking, item_id=outlook_booking_id)
+    booking = await exchange_booking_repository.get_booking(item_id=outlook_booking_id)
     if booking is None:
         raise HTTPException(404, "Booking not found")
 
     if user.email not in get_emails_to_attendees_index(booking):
         raise HTTPException(403, "You are not the participant of the booking")
 
-    await asyncio.to_thread(exchange_booking_repository.delete_booking, item_id=outlook_booking_id, email=user.email)
+    await exchange_booking_repository.delete_booking(item_id=outlook_booking_id, email=user.email)
 
 
 @router.get("/user/{user_id}/bookings")
 async def get_user_bookings(
-    user_id: str, _: ApiKeyDep, start: datetime.datetime, end: datetime.datetime
+    user_id: str,
+    _: ApiKeyDep,
+    start: datetime.datetime | None = Query(
+        None, description="Start date, if not provided, will be set to 7 days before current date"
+    ),
+    end: datetime.datetime | None = Query(
+        None, description="End date, if not provided, will be set to 14 days after current date"
+    ),
 ) -> list[Booking]:
+    start, end = _default_date_range(start, end)
+
     try:
         innohassle_user = await inh_accounts.get_user(innohassle_id=user_id)
     except httpx.HTTPStatusError as e:
@@ -227,8 +261,7 @@ async def get_user_bookings(
     if innohassle_user is None or innohassle_user.innopolis_sso is None:
         raise HTTPException(404, "User not found")
 
-    return await asyncio.to_thread(
-        exchange_booking_repository.fetch_user_bookings,
+    return await exchange_booking_repository._fetch_user_bookings(
         attendee_email=innohassle_user.innopolis_sso.email,
         start=start,
         end=end,

@@ -77,8 +77,10 @@ class Settings(SettingBaseModel):
     "Secret key for accessing API by external services"
     rooms: list[Room] = []
     "List of rooms"
-    ics_cache_ttl_seconds: int = 60
-    "TTL for the ICS cache in seconds"
+    ttl_bookings_from_account_calendar: int = 60
+    "TTL for the bookings from account calendar cache in seconds"
+    ttl_bookings_from_busy_info: int = 60
+    "TTL for the bookings from busy info cache in seconds"
     cors_allow_origin_regex: str = ".*"
     "Allowed origins for CORS: from which domains requests to the API are allowed. Specify as a regex: `https://.*.innohassle.ru`"
     accounts: Accounts
