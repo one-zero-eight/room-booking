@@ -48,6 +48,7 @@ class ExchangeBookingRepository:
         config = exchangelib.Configuration(
             auth_type=exchangelib.transport.NOAUTH,
             service_endpoint=self.ews_endpoint,
+            version=exchangelib.Version(exchangelib.version.EXCHANGE_2016),
             max_connections=10,
         )
         self.account = exchangelib.Account(
@@ -56,6 +57,14 @@ class ExchangeBookingRepository:
             config=config,
             autodiscover=False,
         )
+
+    async def get_server_status(self) -> dict | None:
+        try:
+            calendar_folder_info = await asyncio.to_thread(lambda: self.account.calendar)
+            return {"version": str(self.account.version), "folder": str(calendar_folder_info)}
+        except Exception as e:
+            logger.error(f"Error getting calendar folder info: {e}")
+            return None
 
     _cache_bookings_from_busy_info: dict[
         str,
