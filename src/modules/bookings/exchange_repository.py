@@ -150,23 +150,29 @@ class ExchangeBookingRepository:
 
             return room_id_x_calendar_events
 
-        if not use_dedup or self._account_protocol_get_free_busy_info_task is None:
-            logger.info(
-                f"Either dedup is disabled or no task is running, creating new task for time range: {args=},{use_dedup=}"
-            )
-            task = asyncio.create_task(asyncio.to_thread(task_account_get_free_busy_info, args))
-            self._account_protocol_get_free_busy_info_task = (args, task)
-            room_id_x_calendar_events = await task
-        else:
-            existing_args, existing_task = self._account_protocol_get_free_busy_info_task
-            if existing_args == args:
-                logger.info(f"Deduplicate calendar items for same time range, so we will use existing task: {args=}")
-                room_id_x_calendar_events = await existing_task
-            else:
-                logger.info(f"New time range for calendar items, so we will create new task: {args=}")
+        try:
+            if not use_dedup or self._account_protocol_get_free_busy_info_task is None:
+                logger.info(
+                    f"Either dedup is disabled or no task is running, creating new task for time range: {args=}, {use_dedup=}"
+                )
                 task = asyncio.create_task(asyncio.to_thread(task_account_get_free_busy_info, args))
                 self._account_protocol_get_free_busy_info_task = (args, task)
                 room_id_x_calendar_events = await task
+            else:
+                existing_args, existing_task = self._account_protocol_get_free_busy_info_task
+                if existing_args == args:
+                    logger.info(
+                        f"Deduplicate calendar items for same time range, so we will use existing task: {args=}"
+                    )
+                    room_id_x_calendar_events = await existing_task
+                else:
+                    logger.info(f"New time range for calendar items, so we will create new task: {args=}")
+                    task = asyncio.create_task(asyncio.to_thread(task_account_get_free_busy_info, args))
+                    self._account_protocol_get_free_busy_info_task = (args, task)
+                    room_id_x_calendar_events = await task
+        except Exception:
+            self._account_protocol_get_free_busy_info_task = None
+            raise
         # ^^^^^
 
         # ---- Convert EWS CalendarEvents to ours Bookings ----
@@ -250,23 +256,30 @@ class ExchangeBookingRepository:
                 )
             )
 
-        if not use_dedup or self._account_calendar_view_task is None:
-            logger.info(
-                f"Either dedup is disabled or no task is running, creating new task for time range: {args=},{use_dedup=}"
-            )
-            task = asyncio.create_task(asyncio.to_thread(task_account_calendar_view, args))
-            self._account_calendar_view_task = (args, task)
-            calendar_items = await task
-        else:
-            existing_args, existing_task = self._account_calendar_view_task
-            if existing_args == args:
-                logger.info(f"Deduplicate calendar items for same time range, so we will use existing task: {args=}")
-                calendar_items = await existing_task
-            else:
-                logger.info(f"New time range for calendar items, so we will create new task: {args=}")
+        try:
+            if not use_dedup or self._account_calendar_view_task is None:
+                logger.info(
+                    f"Either dedup is disabled or no task is running, creating new task for time range: {args=}, {use_dedup=}"
+                )
                 task = asyncio.create_task(asyncio.to_thread(task_account_calendar_view, args))
                 self._account_calendar_view_task = (args, task)
                 calendar_items = await task
+            else:
+                existing_args, existing_task = self._account_calendar_view_task
+
+                if existing_args == args:
+                    logger.info(
+                        f"Deduplicate calendar items for same time range, so we will use existing task: {args=}"
+                    )
+                    calendar_items = await existing_task
+                else:
+                    logger.info(f"New time range for calendar items, so we will create new task: {args=}")
+                    task = asyncio.create_task(asyncio.to_thread(task_account_calendar_view, args))
+                    self._account_calendar_view_task = (args, task)
+                    calendar_items = await task
+        except Exception:
+            self._account_calendar_view_task = None
+            raise
         # ^^^^^
 
         # ---- Convert EWS CalendarItems to ours Bookings ----

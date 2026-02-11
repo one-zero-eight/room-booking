@@ -144,22 +144,30 @@ async def create_booking(
         participant_emails=request.participant_emails or [],
     )
 
-    await asyncio.sleep(5)
-    # NOTE: Assuming that rooms answers in 5 seconds
-    # TODO: Rooms, that don't answer automatically, should be handled individually
+    await asyncio.sleep(2)
 
-    item = await exchange_booking_repository.get_booking(item_id=item_id)
+    tries = 10
+    booking = None
+    for _ in range(tries):  # TODO: Rooms, that don't answer automatically, should be handled individually
+        item = await exchange_booking_repository.get_booking(item_id=item_id)
 
-    if item is None:
-        raise HTTPException(404, "Booking was removed during booking")
+        if item is None:
+            raise HTTPException(404, "Booking was removed during booking")
 
-    email_index = get_emails_to_attendees_index(item)
-    room_attendee = email_index.get(room.resource_email)
+        booking = calendar_item_to_booking(item, room_id=room.id)
+        email_index = get_emails_to_attendees_index(item)
+        room_attendee = email_index.get(room.resource_email)
 
-    if room_attendee is None or room_attendee.response_type == "Decline":
-        raise HTTPException(403, "Booking was declined by the room")
+        if room_attendee is None or room_attendee.response_type == "Decline":
+            raise HTTPException(403, "Booking was declined by the room")
 
-    booking = calendar_item_to_booking(item)
+        if room_attendee.last_response_time is not None:
+            if booking is None:
+                raise HTTPException(404, "Room attendee not found in booking attendees")
+
+            return booking
+
+        await asyncio.sleep(1)
 
     if booking is None:
         raise HTTPException(404, "Room attendee not found in booking attendees")
