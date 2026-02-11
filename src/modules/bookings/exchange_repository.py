@@ -31,6 +31,7 @@ class ExchangeBookingRepository:
         config = exchangelib.Configuration(
             auth_type=exchangelib.transport.NOAUTH,
             service_endpoint=self.ews_endpoint,
+            max_connections=10,
         )
         self.account = exchangelib.Account(
             self.account_email,
