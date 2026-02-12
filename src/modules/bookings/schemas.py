@@ -30,6 +30,11 @@ class Booking(BaseModel):
     "ID of outlook booking"
     attendees: list[Attendee] | None
     "List of attendees of the booking"
+    related_to_me: bool | None = None
+    """
+    Whether the booking is related to the user, so he can delete, update it or not.
+    If None we don't know whether it is related to the user or not.
+    """
 
     @computed_field
     @property

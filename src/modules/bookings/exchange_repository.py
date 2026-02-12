@@ -9,6 +9,7 @@ import exchangelib
 import exchangelib.errors
 from exchangelib.properties import CalendarEvent
 from exchangelib.services.get_user_availability import FreeBusyView
+from fastapi import HTTPException
 
 import src.modules.bookings.patch_exchangelib  # noqa
 from src.api.logging_ import logger
@@ -20,6 +21,7 @@ from src.modules.bookings.service import (
     get_emails_to_attendees_index,
     get_first_room_attendee_from_emails,
     get_first_room_from_emails,
+    set_related_to_me_for_bookings,
     to_msk,
 )
 from src.modules.rooms.repository import room_repository
@@ -315,9 +317,12 @@ class ExchangeBookingRepository:
         logger.info(f"_fetch_bookings_from_account_calendar took {time.monotonic() - t_start:.2f}s")
         return room_x_bookings
 
-    async def _fetch_user_bookings(
+    async def fetch_user_bookings(
         self, attendee_email: str, start: datetime.datetime, end: datetime.datetime
     ) -> list[Booking]:
+        """
+        Fetch bookings from account calendar for all rooms for the given time range and filter out bookings that are not related to the user. Sets .related_to_me=True attribute for each booking.
+        """
         bookings_from_account_calendar = await self._fetch_bookings_from_account_calendar(
             rooms=room_repository.get_all(include_red=False),
             start=start,
@@ -346,12 +351,13 @@ class ExchangeBookingRepository:
                 if user_attendee is None or user_attendee.status == "Decline":
                     continue
 
+                booking.related_to_me = True
                 user_bookings.append(booking)
 
         return user_bookings
 
-    async def _fetch_bookings_all(
-        self, room_ids: list[str], start: datetime.datetime, end: datetime.datetime
+    async def _fetch_bookings_both_from_account_calendar_and_busy_info(
+        self, room_ids: list[str], start: datetime.datetime, end: datetime.datetime, user_email: str | None
     ) -> list[Booking]:
         rooms = room_repository.get_by_ids(room_ids)
         rooms = list(filter(None, rooms))
@@ -410,25 +416,36 @@ class ExchangeBookingRepository:
 
         bookings.sort(key=lambda x: x.start)
 
+        if user_email is not None:
+            set_related_to_me_for_bookings(bookings, user_email)
+
         return bookings
 
-    async def get_bookings_for_all_rooms(
-        self, from_dt: datetime.datetime, to_dt: datetime.datetime, include_red: bool = False
-    ) -> list[Booking]:
-        room_ids = [
-            room.id for room in room_repository.get_all(include_red) if room.access_level != "red" or include_red
-        ]
-        return await self._fetch_bookings_all(room_ids, from_dt, to_dt)
-
     async def get_booking_for_room(
-        self, room_id: str, from_dt: datetime.datetime, to_dt: datetime.datetime
+        self,
+        room_id: str,
+        from_dt: datetime.datetime,
+        to_dt: datetime.datetime,
+        user_email: str | None = None,
     ) -> list[Booking]:
-        return await self._fetch_bookings_all([room_id], from_dt, to_dt)
+        """
+        Get bookings for a specific room for the given time range. Automatically sets .related_to_me=True for bookings that contain the user's email in the attendees list.
+        """
+        return await self._fetch_bookings_both_from_account_calendar_and_busy_info(
+            [room_id], from_dt, to_dt, user_email
+        )
 
     async def get_bookings_for_certain_rooms(
-        self, room_ids: list[str], from_dt: datetime.datetime, to_dt: datetime.datetime
+        self,
+        room_ids: list[str],
+        from_dt: datetime.datetime,
+        to_dt: datetime.datetime,
+        user_email: str | None = None,
     ) -> list[Booking]:
-        return await self._fetch_bookings_all(room_ids, from_dt, to_dt)
+        """
+        Get bookings for certain rooms for the given time range. Automatically sets .related_to_me=True for bookings that contain the user's email in the attendees list.
+        """
+        return await self._fetch_bookings_both_from_account_calendar_and_busy_info(room_ids, from_dt, to_dt, user_email)
 
     async def create_booking(
         self,
@@ -438,7 +455,12 @@ class ExchangeBookingRepository:
         title: str,
         organizer_email: str,
         participant_emails: list[str],
-    ) -> str:
+        user_email: str,
+    ) -> Booking:
+        """
+        Create a booking for a specific room. Automatically sets .related_to_me=True for the booking.
+        May raise HTTPExceptions.
+        """
         start = to_msk(start)
         end = to_msk(end)
         item = exchangelib.CalendarItem(
@@ -459,7 +481,35 @@ class ExchangeBookingRepository:
             ],
         )
         await asyncio.to_thread(item.save, send_meeting_invitations=exchangelib.items.SEND_TO_ALL_AND_SAVE_COPY)
-        return item.id
+        item_id = str(item.id)
+
+        await asyncio.sleep(2)
+
+        tries = 10
+        booking = None
+        for _ in range(tries):  # TODO: Rooms, that don't answer automatically, should be handled individually
+            fetched = await self.get_booking(item_id=item_id)
+
+            if fetched is None:
+                raise HTTPException(404, "Booking was removed during booking")
+
+            booking = calendar_item_to_booking(fetched, room_id=room.id, user_email=user_email)
+            email_index = get_emails_to_attendees_index(fetched)
+            room_attendee = email_index.get(room.resource_email)
+
+            if room_attendee is None or room_attendee.response_type == "Decline":
+                raise HTTPException(403, "Booking was declined by the room")
+
+            if room_attendee.last_response_time is not None:
+                if booking is None:
+                    raise HTTPException(404, "Room attendee not found in booking attendees")
+                return booking
+
+            await asyncio.sleep(1)
+
+        if booking is None:
+            raise HTTPException(404, "Room attendee not found in booking attendees")
+        return booking
 
     async def get_booking(self, item_id: str) -> exchangelib.CalendarItem | None:
         try:
@@ -474,6 +524,7 @@ class ExchangeBookingRepository:
         new_start: datetime.datetime | None = None,
         new_end: datetime.datetime | None = None,
         new_title: str | None = None,
+        user_email: str | None = None,
     ) -> Booking | None:
         item = await self.get_booking(item_id)
         if item is None:
@@ -515,7 +566,7 @@ class ExchangeBookingRepository:
             new_room_attendee = get_first_room_attendee_from_emails(new_email_index)
 
             if new_room_attendee.last_response_time != old_room_attendee.last_response_time:
-                return calendar_item_to_booking(new_item)
+                return calendar_item_to_booking(new_item, user_email=user_email)
         return None
 
     async def delete_booking(self, item_id: str, email: str | None) -> bool:

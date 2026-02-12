@@ -45,7 +45,11 @@ def get_first_room_attendee_from_emails(email_index: dict[str, exchangelib.Atten
     return None
 
 
-def calendar_item_to_booking(calendar_item: CalendarItem, room_id: str | None = None) -> Booking | None:
+def calendar_item_to_booking(
+    calendar_item: CalendarItem,
+    room_id: str | None = None,
+    user_email: str | None = None,
+) -> Booking | None:
     email_index = get_emails_to_attendees_index(calendar_item=calendar_item)
     if room_id is None:
         room = get_first_room_from_emails(emails=email_index.keys())
@@ -63,6 +67,15 @@ def calendar_item_to_booking(calendar_item: CalendarItem, room_id: str | None = 
         if room.resource_email not in email_index:
             return None
 
+    related_to_me = None
+    if user_email is not None:
+        for email, _attendee in email_index.items():
+            if email == user_email:
+                related_to_me = True
+                break
+        else:
+            related_to_me = False
+
     return Booking(
         room_id=room.id,
         title=cast(str, calendar_item.subject) or "Busy",
@@ -77,4 +90,23 @@ def calendar_item_to_booking(calendar_item: CalendarItem, room_id: str | None = 
             )
             for email, attendee in email_index.items()
         ],
+        related_to_me=related_to_me,
     )
+
+
+def set_related_to_me_for_bookings(bookings: list[Booking] | Booking, user_email: str) -> None:
+    if isinstance(bookings, Booking):
+        bookings_to_set = [bookings]
+    else:
+        bookings_to_set = bookings
+
+    for booking in bookings_to_set:
+        if booking.attendees is None:  # We don't know whether the booking is related to the user, so we set it to None
+            booking.related_to_me = None
+        else:
+            for attendee in booking.attendees:
+                if attendee.email == user_email:
+                    booking.related_to_me = True
+                    break
+            else:
+                booking.related_to_me = False
