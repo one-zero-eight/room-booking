@@ -119,8 +119,8 @@ class ExchangeBookingRepository:
         # ^^^^^
 
         # ---- Fetch account free busy info with only one request at a time ----
-        rooms_ids = tuple(sorted({room.id for room in rooms}))
-        accounts = tuple(sorted([(room.resource_email, "Resource", False) for room in rooms]))
+        rooms_ids = tuple({room.id for room in rooms})
+        accounts = tuple((room.resource_email, "Resource", False) for room in rooms)
         args = AccountGetFreeBusyInfoArgs(
             rooms_ids=rooms_ids,
             accounts=accounts,
@@ -142,6 +142,7 @@ class ExchangeBookingRepository:
             room_id_x_calendar_events: dict[str, list[CalendarEvent]] = {}
 
             for i, busy_info in enumerate(account_free_busy_info):
+                print(busy_info)
                 room_id = args["rooms_ids"][i]
                 if busy_info is not None and busy_info.calendar_events is not None:
                     room_id_x_calendar_events[room_id] = list(cast(Iterable[CalendarEvent], busy_info.calendar_events))
