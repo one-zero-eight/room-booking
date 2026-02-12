@@ -119,7 +119,7 @@ class ExchangeBookingRepository:
         # ^^^^^
 
         # ---- Fetch account free busy info with only one request at a time ----
-        rooms_ids = tuple({room.id for room in rooms})
+        rooms_ids = tuple(room.id for room in rooms)
         accounts = tuple((room.resource_email, "Resource", False) for room in rooms)
         args = AccountGetFreeBusyInfoArgs(
             rooms_ids=rooms_ids,
