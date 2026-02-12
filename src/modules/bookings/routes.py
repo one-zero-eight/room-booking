@@ -43,13 +43,16 @@ def _default_date_range(
 router = APIRouter(
     tags=["Bookings"],
     responses={
-        404: {"description": "Booking not found"},
         403: {"description": "Unauthorized"},
+        429: {"description": "EWS error, probably Outlook is down"},
     },
 )
 
 
-@router.get("/bookings/", responses={404: {"description": "Room not found"}})
+@router.get(
+    "/bookings/",
+    responses={404: {"description": "Room not found"}},
+)
 async def bookings(
     _: VerifiedDep,
     room_id: str | None = Query(None, title="ID for getting single room bookings"),
@@ -116,18 +119,13 @@ async def my_bookings(
 
 
 @router.post("/bookings/")
-async def create_booking(
-    user: VerifiedDep,
-    request: CreateBookingRequest,
-) -> Booking:
+async def create_booking(user: VerifiedDep, request: CreateBookingRequest) -> Booking:
     room = room_repository.get_by_id(room_id=request.room_id)
     if room is None:
         raise HTTPException(404, "Room not found")
 
-    try:
-        innohassle_user = await inh_accounts.get_user(innohassle_id=user.innohassle_id)
-    except httpx.HTTPStatusError as e:
-        raise HTTPException(e.response.status_code, e.response.json())
+    innohassle_user = await inh_accounts.get_user(innohassle_id=user.innohassle_id)
+
     if innohassle_user is None or innohassle_user.innopolis_sso is None:
         raise HTTPException(401, "Invalid user")
 
@@ -175,7 +173,10 @@ async def create_booking(
     return booking
 
 
-@router.get("/bookings/{outlook_booking_id}")
+@router.get(
+    "/bookings/{outlook_booking_id}",
+    responses={404: {"description": "Booking not found OR Room attendee not found in booking attendees"}},
+)
 async def get_booking(outlook_booking_id: str, _: VerifiedDep) -> Booking:
     calendar_item = await exchange_booking_repository.get_booking(outlook_booking_id)
     if calendar_item is None:
@@ -187,13 +188,20 @@ async def get_booking(outlook_booking_id: str, _: VerifiedDep) -> Booking:
     return booking
 
 
-@router.patch("/bookings/{outlook_booking_id}")
+@router.patch(
+    "/bookings/{outlook_booking_id}",
+    responses={
+        403: {"description": "You are not the participant of the booking"},
+        404: {"description": "Booking not found OR Room attendee not found in booking attendees"},
+    },
+)
 async def update_booking(
     outlook_booking_id: str,
     user: VerifiedDep,
     request: PatchBookingRequest,
 ) -> Booking:
     booking = await exchange_booking_repository.get_booking(item_id=outlook_booking_id)
+
     if booking is None:
         raise HTTPException(404, "Booking not found")
 
@@ -206,10 +214,8 @@ async def update_booking(
     if room is None:
         raise HTTPException(400, "Invalid booking")
 
-    try:
-        innohassle_user = await inh_accounts.get_user(innohassle_id=user.innohassle_id)
-    except httpx.HTTPStatusError as e:
-        raise HTTPException(e.response.status_code, e.response.json())
+    innohassle_user = await inh_accounts.get_user(innohassle_id=user.innohassle_id)
+
     if innohassle_user is None or innohassle_user.innopolis_sso is None:
         raise HTTPException(401, "Invalid user")
 
@@ -240,6 +246,8 @@ async def update_booking(
     status_code=200,
     responses={
         200: {"description": "Deleted successfully"},
+        403: {"description": "You are not the participant of the booking"},
+        404: {"description": "Booking not found"},
     },
 )
 async def delete_booking(user: VerifiedDep, outlook_booking_id: str):
@@ -253,7 +261,10 @@ async def delete_booking(user: VerifiedDep, outlook_booking_id: str):
     await exchange_booking_repository.delete_booking(item_id=outlook_booking_id, email=user.email)
 
 
-@router.get("/user/{user_id}/bookings")
+@router.get(
+    "/user/{user_id}/bookings",
+    responses={404: {"description": "User not found"}},
+)
 async def get_user_bookings(
     user_id: str,
     _: ApiKeyDep,

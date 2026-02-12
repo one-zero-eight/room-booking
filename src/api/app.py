@@ -1,12 +1,15 @@
 __all__ = ["app"]
 
+import exchangelib.errors
 from fastapi import FastAPI
+from fastapi.requests import Request
+from fastapi.responses import JSONResponse
 from fastapi_swagger import patch_fastapi
 from starlette.middleware.cors import CORSMiddleware
 
-import src.api.logging_  # noqa: F401
 from src.api import docs
 from src.api.lifespan import lifespan
+from src.api.logging_ import logger  # noqa: F401
 from src.config import settings
 
 # App definition
@@ -54,3 +57,12 @@ from src.modules.rooms.routes import router as router_rooms  # noqa: E402
 
 app.include_router(router_rooms)
 app.include_router(router_bookings)
+
+
+@app.exception_handler(exchangelib.errors.EWSError)
+async def ews_error_handler(
+    request: Request,
+    exc: exchangelib.errors.EWSError,
+):
+    logger.warning(f"EWS error, probably Outlook is down: {exc}", exc_info=True)
+    return JSONResponse(status_code=429, content={"detail": f"EWS error, probably Outlook is down: {exc}"})
