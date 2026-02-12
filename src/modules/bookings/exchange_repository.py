@@ -50,7 +50,7 @@ class ExchangeBookingRepository:
             auth_type=exchangelib.transport.NOAUTH,
             service_endpoint=self.ews_endpoint,
             version=exchangelib.Version(exchangelib.version.EXCHANGE_2016),
-            max_connections=1,
+            max_connections=5,
         )
         self.account = exchangelib.Account(
             self.account_email,
@@ -102,6 +102,7 @@ class ExchangeBookingRepository:
         use_cache: bool = True,
         use_dedup: bool = True,
     ) -> dict[str, list[Booking]]:
+        t_start = time.monotonic()
         room_ids = {room.id for room in rooms}
 
         # ---- Get cached bookings ----
@@ -197,6 +198,7 @@ class ExchangeBookingRepository:
             self._cache_bookings_from_busy_info[room_id] = (room_bookings, datetime.datetime.now())
         # ^^^^^
 
+        logger.info(f"_fetch_bookings_from_busy_info took {time.monotonic() - t_start:.2f}s")
         return room_id_x_bookings
 
     _cache_bookings_from_account_calendar: dict[
@@ -230,6 +232,7 @@ class ExchangeBookingRepository:
         use_cache: bool = True,
         use_dedup: bool = True,
     ) -> dict[str, list[Booking]]:
+        t_start = time.monotonic()
         rooms_ids = {room.id for room in rooms}
 
         # ---- Get cached bookings ----
@@ -254,7 +257,7 @@ class ExchangeBookingRepository:
                 self.account.calendar.view(
                     exchangelib.EWSDateTime.from_datetime(args["start"]),
                     exchangelib.EWSDateTime.from_datetime(args["end"]),
-                )
+                ).only("required_attendees", "subject", "start", "end", "id")
             )
 
         try:
@@ -309,6 +312,7 @@ class ExchangeBookingRepository:
             self._cache_bookings_from_account_calendar[room_id] = (room_bookings, datetime.datetime.now())
         # ^^^^^
 
+        logger.info(f"_fetch_bookings_from_account_calendar took {time.monotonic() - t_start:.2f}s")
         return room_x_bookings
 
     async def _fetch_user_bookings(
@@ -354,19 +358,21 @@ class ExchangeBookingRepository:
         if not rooms:
             return []
 
-        bookings_from_account_calendar = await self._fetch_bookings_from_account_calendar(
-            rooms=rooms,
-            start=start,
-            end=end,
-            use_cache=True,
-            use_dedup=True,
-        )
-        bookings_from_busy_info = await self._fetch_bookings_from_busy_info(
-            rooms=rooms,
-            start=start,
-            end=end,
-            use_cache=True,
-            use_dedup=True,
+        bookings_from_account_calendar, bookings_from_busy_info = await asyncio.gather(
+            self._fetch_bookings_from_account_calendar(
+                rooms=rooms,
+                start=start,
+                end=end,
+                use_cache=True,
+                use_dedup=True,
+            ),
+            self._fetch_bookings_from_busy_info(
+                rooms=rooms,
+                start=start,
+                end=end,
+                use_cache=True,
+                use_dedup=True,
+            ),
         )
 
         account_calendar_registry = defaultdict(list)
