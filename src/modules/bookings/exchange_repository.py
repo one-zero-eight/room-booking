@@ -403,6 +403,8 @@ class ExchangeBookingRepository:
             else:
                 bookings.extend(bi_bookings)
 
+        bookings.sort(key=lambda x: x.start)
+
         return bookings
 
     async def get_bookings_for_all_rooms(
