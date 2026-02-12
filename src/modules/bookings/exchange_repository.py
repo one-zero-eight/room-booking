@@ -142,7 +142,6 @@ class ExchangeBookingRepository:
             room_id_x_calendar_events: dict[str, list[CalendarEvent]] = {}
 
             for i, busy_info in enumerate(account_free_busy_info):
-                print(busy_info)
                 room_id = args["rooms_ids"][i]
                 if busy_info is not None and busy_info.calendar_events is not None:
                     room_id_x_calendar_events[room_id] = list(cast(Iterable[CalendarEvent], busy_info.calendar_events))
