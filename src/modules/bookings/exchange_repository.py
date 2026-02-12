@@ -136,7 +136,7 @@ class ExchangeBookingRepository:
                     accounts=args["accounts"],
                     start=exchangelib.EWSDateTime.from_datetime(args["start"]),
                     end=exchangelib.EWSDateTime.from_datetime(args["end"]),
-                    merged_free_busy_interval=5,
+                    requested_view="Detailed",
                 ),
             )
 
