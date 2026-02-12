@@ -111,7 +111,7 @@ class ExchangeBookingRepository:
                 if _cached_bookings := self._get_cached_bookings_from_busy_info(room_id, use_ttl=False):
                     room_x_cache[room_id] = _cached_bookings
 
-            if room_ids == set(room_x_cache.keys()):  # cache hit
+            if room_ids.issubset(room_x_cache.keys()):  # cache hit
                 logger.info(f"Cache hit for bookings from busy info for rooms: {room_ids}")
                 return room_x_cache
             else:
@@ -240,7 +240,7 @@ class ExchangeBookingRepository:
                 if _cached_bookings := self._get_cached_bookings_from_account_calendar(room_id, use_ttl=False):
                     room_x_cache[room_id] = _cached_bookings
 
-            if rooms_ids == set(room_x_cache.keys()):  # cache hit
+            if rooms_ids.issubset(room_x_cache.keys()):  # cache hit
                 logger.info(f"Cache hit for bookings from account calendar for rooms: {rooms_ids}")
                 return room_x_cache
             else:
