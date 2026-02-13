@@ -44,6 +44,9 @@ class ExchangeBookingRepository:
     ews_endpoint: str
     account_email: str
     account: exchangelib.Account
+    subscription_id: str | None
+    watermark: str | None
+    last_callback_time: float | None
 
     def __init__(self, ews_endpoint: str, account_email: str):
         self.ews_endpoint = ews_endpoint
@@ -62,6 +65,10 @@ class ExchangeBookingRepository:
             autodiscover=False,
         )
 
+        self.subscription_id = None
+        self.watermark = None
+        self.last_callback_time = None
+
     async def get_server_status(self) -> dict | None:
         try:
             t1 = time.monotonic()
@@ -75,6 +82,20 @@ class ExchangeBookingRepository:
         except Exception as e:
             logger.error(f"Error getting calendar folder info: {e}")
             return None
+
+    async def push_subscription(self, callback_url: str) -> tuple[str, str]:
+        with self.account.calendar.push_subscription(
+            callback_url=callback_url,
+            event_types=("ModifiedEvent",),
+        ) as (
+            subscription_id,
+            watermark,
+        ):
+            self.subscription_id = subscription_id
+            self.watermark = watermark
+            self.last_callback_time = time.monotonic()
+
+            return (subscription_id, watermark)
 
     _cache_bookings_from_busy_info: dict[
         str,

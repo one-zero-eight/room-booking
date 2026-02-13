@@ -63,6 +63,8 @@ class Exchange(SettingBaseModel):
     "Username for accessing the EWS endpoint (email)"
     password: SecretStr
     "Password for accessing the EWS endpoint"
+    ews_callback_url: str | None = None
+    "URL of the EWS callback for push subscription"
 
 
 class Settings(SettingBaseModel):

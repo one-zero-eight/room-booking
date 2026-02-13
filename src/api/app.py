@@ -1,9 +1,13 @@
 __all__ = ["app"]
 
+import datetime
+import pprint
+import time
+
 import exchangelib.errors
 from fastapi import FastAPI
 from fastapi.requests import Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from fastapi_swagger import patch_fastapi
 from starlette.middleware.cors import CORSMiddleware
 
@@ -66,3 +70,65 @@ async def ews_error_handler(
 ):
     logger.warning(f"EWS error, probably Outlook is down: {exc}", exc_info=True)
     return JSONResponse(status_code=429, content={"detail": f"EWS error, probably Outlook is down: {exc}"})
+
+
+last_callback_time: datetime.datetime | None = None
+
+
+@app.post("/ews-callback")
+async def ews_callback(request: Request):
+    """
+    EWS callback endpoint for push subscription.
+    https://ecederstrand.github.io/exchangelib/#synchronization-subscriptions-and-notifications
+    """
+    from collections.abc import Iterable
+    from typing import cast
+
+    from exchangelib.properties import (
+        ModifiedEvent,
+        Notification,
+        TimestampEvent,
+    )
+    from exchangelib.services import SendNotification
+
+    from src.modules.bookings.exchange_repository import exchange_booking_repository
+    from src.modules.bookings.service import get_emails_to_attendees_index
+
+    ws = SendNotification(protocol=None)
+    for notification in ws.parse(await request.body()):
+        # ws.parse() returns Notification objects
+
+        logger.info("Notification from Exchange")
+        if not isinstance(notification, Notification):
+            logger.warning("Notification from Exchange is not a Notification object")
+            continue
+
+        if notification.subscription_id != exchange_booking_repository.subscription_id:
+            logger.warning("Notification from Exchange with wrong subscription ID")
+            continue
+
+        exchange_booking_repository.last_callback_time = time.monotonic()  # used for subscription restart
+
+        for event in cast(Iterable[TimestampEvent], notification.events):
+            logger.info(f"Event: {type(event)}\n{pprint.pformat(event, sort_dicts=False, compact=True)}")
+
+            if isinstance(event, ModifiedEvent):
+                if event.item_id is not None:
+                    booking = await exchange_booking_repository.get_booking(event.item_id.id)
+                    if booking is None:
+                        logger.warning("Booking not found")
+                        continue
+                    email_index = get_emails_to_attendees_index(booking)
+
+                    for email, attendee in email_index.items():
+                        if attendee.response_type == "Decline":
+                            logger.warning(f"Attendee ({email}) declined the booking, so we will delete this booking")
+                            await exchange_booking_repository.delete_booking(event.item_id.id, email)
+                            logger.info(f"Booking deleted: {event.item_id.id}")
+                            break
+
+    data = ws.ok_payload()
+    # # Or, if you want to end the subscription:
+    # data = ws.unsubscribe_payload()
+
+    return Response(content=data, status_code=201, media_type="text/xml; charset=utf-8")

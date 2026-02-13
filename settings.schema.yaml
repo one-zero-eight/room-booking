@@ -44,6 +44,13 @@ $defs:
         title: Password
         type: string
         writeOnly: true
+      ews_callback_url:
+        anyOf:
+        - type: string
+        - type: 'null'
+        default: null
+        description: URL of the EWS callback for push subscription
+        title: Ews Callback Url
     required:
     - username
     - password
