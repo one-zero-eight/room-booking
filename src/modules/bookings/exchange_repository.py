@@ -479,14 +479,14 @@ class ExchangeBookingRepository:
             start=exchangelib.EWSDateTime.from_datetime(start),
             end=exchangelib.EWSDateTime.from_datetime(end),
             subject=title,
-            body=f"Booking on request from {organizer.email} ({', '.join(organizer_roles) or 'no roles'})\nProvider: https://innohassle.ru/room-booking",
-            location=f"{room.title} ({organizer.email})",
+            body=f"Booking on request from {organizer.innopolis_info.email} ({', '.join(organizer_roles) or 'no roles'})\nProvider: https://innohassle.ru/room-booking",
+            location=f"{room.title} ({organizer.innopolis_info.email})",
             resources=[
                 room.resource_email,
             ],
             required_attendees=[
                 room.resource_email,
-                organizer.email,
+                organizer.innopolis_info.email,
                 *participant_emails,
             ],
         )
