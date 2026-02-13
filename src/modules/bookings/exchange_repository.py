@@ -205,10 +205,13 @@ class ExchangeBookingRepository:
         room_id_x_bookings: dict[str, list[Booking]] = defaultdict(list)
         for room_id, room_calendar_events in room_id_x_calendar_events.items():
             for calendar_event in room_calendar_events:
+                title = "Busy"
+                if calendar_event.details is not None and calendar_event.details.subject is not None:
+                    title = calendar_event.details.subject
                 room_id_x_bookings[room_id].append(
                     Booking(
                         room_id=room_id,
-                        title=calendar_event.details.subject if calendar_event.details else "Busy",
+                        title=title,
                         start=calendar_event.start,
                         end=calendar_event.end,
                         outlook_booking_id=None,
