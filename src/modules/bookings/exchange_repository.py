@@ -47,6 +47,7 @@ class ExchangeBookingRepository:
     subscription_id: str | None
     watermark: str | None
     last_callback_time: float | None
+    pending_bookings_to_cancel: set[str] = set()
 
     def __init__(self, ews_endpoint: str, account_email: str):
         self.ews_endpoint = ews_endpoint
@@ -610,10 +611,7 @@ class ExchangeBookingRepository:
                 return calendar_item_to_booking(new_item, user_email=user_email)
         return None
 
-    async def delete_booking(self, item_id: str, email: str | None) -> bool:
-        item = await self.get_booking(item_id)
-        if item is None:
-            return True
+    async def cancel_booking(self, item: exchangelib.CalendarItem, email: str | None) -> bool:
         await asyncio.to_thread(
             item.cancel, new_body=f"Canceled by {email}\nProvider: https://innohassle.ru/room-booking"
         )

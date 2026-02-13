@@ -98,6 +98,7 @@ async def ews_callback(request: Request):
     from src.modules.bookings.service import get_emails_to_attendees_index
 
     ws = SendNotification(protocol=None)
+    data = ws.ok_payload()
     for notification in ws.parse(await request.body()):
         # ws.parse() returns Notification objects
 
@@ -107,8 +108,9 @@ async def ews_callback(request: Request):
             continue
 
         if notification.subscription_id != exchange_booking_repository.subscription_id:
-            logger.warning("Notification from Exchange with wrong subscription ID")
-            continue
+            logger.warning("Notification from Exchange with wrong subscription ID, unsubscribing")
+            data = ws.unsubscribe_payload()
+            break
 
         exchange_booking_repository.last_callback_time = time.monotonic()  # used for subscription restart
 
@@ -126,12 +128,8 @@ async def ews_callback(request: Request):
                     for email, attendee in email_index.items():
                         if attendee.response_type == "Decline":
                             logger.warning(f"Attendee ({email}) declined the booking, so we will delete this booking")
-                            await exchange_booking_repository.delete_booking(event.item_id.id, email)
+                            await exchange_booking_repository.cancel_booking(booking, email)
                             logger.info(f"Booking deleted: {event.item_id.id}")
                             break
-
-    data = ws.ok_payload()
-    # # Or, if you want to end the subscription:
-    # data = ws.unsubscribe_payload()
 
     return Response(content=data, status_code=201, media_type="text/xml; charset=utf-8")

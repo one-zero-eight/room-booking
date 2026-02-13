@@ -304,7 +304,7 @@ async def delete_booking(user: VerifiedDep, outlook_booking_id: str):
     if user.email not in get_emails_to_attendees_index(booking):
         raise HTTPException(403, "You are not the participant of the booking")
 
-    await exchange_booking_repository.delete_booking(item_id=outlook_booking_id, email=user.email)
+    await exchange_booking_repository.cancel_booking(booking, email=user.email)
 
 
 @router.get(
