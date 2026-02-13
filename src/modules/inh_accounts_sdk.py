@@ -27,6 +27,7 @@ class InnopolisInfo(BaseModel):
     name: str | None = None
     is_student: bool = False
     is_staff: bool = False
+    is_college: bool = False
     updated_at: datetime.datetime
 
 
@@ -37,6 +38,7 @@ class UserInfoFromSSO(BaseModel):
     issued_at: datetime.datetime | None = None
     is_student: bool = False
     is_staff: bool = False
+    is_college: bool = False
     group: str | None = None
 
 

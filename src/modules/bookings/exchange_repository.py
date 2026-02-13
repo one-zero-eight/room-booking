@@ -24,6 +24,7 @@ from src.modules.bookings.service import (
     set_related_to_me_for_bookings,
     to_msk,
 )
+from src.modules.inh_accounts_sdk import UserSchema
 from src.modules.rooms.repository import room_repository
 
 
@@ -453,7 +454,7 @@ class ExchangeBookingRepository:
         start: datetime.datetime,
         end: datetime.datetime,
         title: str,
-        organizer_email: str,
+        organizer: UserSchema,
         participant_emails: list[str],
         user_email: str,
     ) -> Booking:
@@ -463,20 +464,29 @@ class ExchangeBookingRepository:
         """
         start = to_msk(start)
         end = to_msk(end)
+
+        organizer_roles = []
+        if organizer.innopolis_info.is_staff:
+            organizer_roles.append("staff")
+        if organizer.innopolis_info.is_student:
+            organizer_roles.append("student")
+        if organizer.innopolis_info.is_college:
+            organizer_roles.append("college")
+
         item = exchangelib.CalendarItem(
             account=self.account,
             folder=self.account.calendar,
             start=exchangelib.EWSDateTime.from_datetime(start),
             end=exchangelib.EWSDateTime.from_datetime(end),
             subject=title,
-            body=f"Booking on request from {organizer_email}\nProvider: https://innohassle.ru/room-booking",
-            location=f"{room.title}",
+            body=f"Booking on request from {organizer.email} ({', '.join(organizer_roles) or 'no roles'})\nProvider: https://innohassle.ru/room-booking",
+            location=f"{room.title} ({organizer.email})",
             resources=[
                 room.resource_email,
             ],
             required_attendees=[
                 room.resource_email,
-                organizer_email,
+                organizer.email,
                 *participant_emails,
             ],
         )

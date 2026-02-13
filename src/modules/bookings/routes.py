@@ -153,7 +153,7 @@ async def create_booking(user: VerifiedDep, request: CreateBookingRequest) -> Bo
         start=request.start,
         end=request.end,
         title=request.title,
-        organizer_email=user.email,
+        organizer=innohassle_user,
         participant_emails=request.participant_emails or [],
         user_email=user.email,
     )
