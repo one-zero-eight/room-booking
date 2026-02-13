@@ -106,9 +106,9 @@ class ExchangeBookingRepository:
         cached_bookings, cached_dt = self._cache_bookings_from_busy_info.get(room_id, (None, None))
         if cached_bookings is not None and cached_dt is not None:
             if not use_ttl:
-                return cached_bookings
+                return [c.model_copy() for c in cached_bookings]
             if datetime.datetime.now() - cached_dt < datetime.timedelta(seconds=settings.ttl_bookings_from_busy_info):
-                return cached_bookings
+                return [c.model_copy() for c in cached_bookings]
 
     _account_protocol_get_free_busy_info_task: (
         tuple[
@@ -234,11 +234,11 @@ class ExchangeBookingRepository:
         cached_bookings, cached_dt = self._cache_bookings_from_account_calendar.get(room_id, (None, None))
         if cached_bookings is not None and cached_dt is not None:
             if not use_ttl:
-                return cached_bookings
+                return [c.model_copy() for c in cached_bookings]
             if datetime.datetime.now() - cached_dt < datetime.timedelta(
                 seconds=settings.ttl_bookings_from_account_calendar
             ):
-                return cached_bookings
+                return [c.model_copy() for c in cached_bookings]
 
     _account_calendar_view_task: (
         tuple[
