@@ -103,12 +103,11 @@ class ExchangeBookingRepository:
         tuple[list[Booking], datetime.datetime],
     ] = {}
 
-    def _get_cached_bookings_from_busy_info(self, room_id: str, use_ttl: bool = True) -> list[Booking] | None:
+    def _get_cached_bookings_from_busy_info(self, room_id: str) -> list[Booking] | None:
         cached_bookings, cached_dt = self._cache_bookings_from_busy_info.get(room_id, (None, None))
         if cached_bookings is not None and cached_dt is not None:
-            if not use_ttl:
-                return [c.model_copy() for c in cached_bookings]
-            if datetime.datetime.now() - cached_dt < datetime.timedelta(seconds=settings.ttl_bookings_from_busy_info):
+            ttl = datetime.timedelta(seconds=settings.ttl_bookings_from_busy_info)
+            if datetime.datetime.now() - cached_dt < ttl:
                 return [c.model_copy() for c in cached_bookings]
 
     _account_protocol_get_free_busy_info_task: (
@@ -134,7 +133,7 @@ class ExchangeBookingRepository:
         if use_cache:
             room_x_cache: dict[str, list[Booking]] = {}
             for room_id in room_ids:
-                if _cached_bookings := self._get_cached_bookings_from_busy_info(room_id, use_ttl=False):
+                if _cached_bookings := self._get_cached_bookings_from_busy_info(room_id):
                     room_x_cache[room_id] = _cached_bookings
 
             if room_ids.issubset(room_x_cache.keys()):  # cache hit
@@ -234,14 +233,11 @@ class ExchangeBookingRepository:
         tuple[list[Booking], datetime.datetime],
     ] = {}
 
-    def _get_cached_bookings_from_account_calendar(self, room_id: str, use_ttl: bool = True) -> list[Booking] | None:
+    def _get_cached_bookings_from_account_calendar(self, room_id: str) -> list[Booking] | None:
         cached_bookings, cached_dt = self._cache_bookings_from_account_calendar.get(room_id, (None, None))
         if cached_bookings is not None and cached_dt is not None:
-            if not use_ttl:
-                return [c.model_copy() for c in cached_bookings]
-            if datetime.datetime.now() - cached_dt < datetime.timedelta(
-                seconds=settings.ttl_bookings_from_account_calendar
-            ):
+            ttl = datetime.timedelta(seconds=settings.ttl_bookings_from_account_calendar)
+            if datetime.datetime.now() - cached_dt < ttl:
                 return [c.model_copy() for c in cached_bookings]
 
     _account_calendar_view_task: (
@@ -267,7 +263,7 @@ class ExchangeBookingRepository:
         if use_cache:
             room_x_cache: dict[str, list[Booking]] = {}
             for room_id in rooms_ids:
-                if _cached_bookings := self._get_cached_bookings_from_account_calendar(room_id, use_ttl=False):
+                if _cached_bookings := self._get_cached_bookings_from_account_calendar(room_id):
                     room_x_cache[room_id] = _cached_bookings
 
             if rooms_ids.issubset(room_x_cache.keys()):  # cache hit
