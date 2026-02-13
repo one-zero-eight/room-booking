@@ -494,13 +494,20 @@ class ExchangeBookingRepository:
         if organizer.innopolis_info.is_college:
             organizer_roles.append("college")
 
+        mail_body = (
+            f"Booking on request from {organizer.innopolis_info.email} ({', '.join(organizer_roles) or 'no roles'})\n"
+            f"Provider: https://innohassle.ru/room-booking\n"
+            f"\n"
+            f"View full room schedule at https://innohassle.ru/room-booking/rooms/{room.id}"
+        )
+
         item = exchangelib.CalendarItem(
             account=self.account,
             folder=self.account.calendar,
             start=exchangelib.EWSDateTime.from_datetime(start),
             end=exchangelib.EWSDateTime.from_datetime(end),
             subject=title,
-            body=f"Booking on request from {organizer.innopolis_info.email} ({', '.join(organizer_roles) or 'no roles'})\nProvider: https://innohassle.ru/room-booking",
+            body=mail_body,
             location=f"{room.title} ({organizer.innopolis_info.email})",
             resources=[
                 room.resource_email,
