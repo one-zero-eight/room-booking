@@ -160,7 +160,7 @@ async def create_booking(user: VerifiedDep, request: CreateBookingRequest) -> Bo
 
 
 @router.get(
-    "/bookings/{outlook_booking_id}",
+    "/bookings/{outlook_booking_id:path}",
     responses={404: {"description": "Booking not found OR Room attendee not found in booking attendees"}},
 )
 async def get_booking(outlook_booking_id: str, user: VerifiedDep) -> Booking:
@@ -175,7 +175,7 @@ async def get_booking(outlook_booking_id: str, user: VerifiedDep) -> Booking:
 
 
 @router.patch(
-    "/bookings/{outlook_booking_id}",
+    "/bookings/{outlook_booking_id:path}",
     responses={
         403: {"description": "You are not the participant of the booking"},
         404: {"description": "Booking not found OR Room attendee not found in booking attendees"},
@@ -230,7 +230,7 @@ async def update_booking(
 
 
 @router.delete(
-    "/bookings/{outlook_booking_id}",
+    "/bookings/{outlook_booking_id:path}",
     status_code=200,
     responses={
         200: {"description": "Deleted successfully"},
