@@ -9,8 +9,10 @@ from typing import cast
 
 import httpx
 from fastapi import APIRouter, HTTPException, Query
+from pydantic import BaseModel, EmailStr
 
 from src.api.dependencies import ApiKeyDep, VerifiedDep
+from src.api.logging_ import logger
 from src.modules.bookings.exchange_repository import exchange_booking_repository
 from src.modules.bookings.schemas import (
     Booking,
@@ -156,6 +158,62 @@ async def create_booking(user: VerifiedDep, request: CreateBookingRequest) -> Bo
         organizer=innohassle_user,
         participant_emails=request.participant_emails or [],
         user_email=user.email,
+    )
+
+
+class AttendeeDetails(BaseModel):
+    name: str | None
+    email: str | None
+    telegram_username: str | None
+    is_staff: bool
+    is_student: bool
+    is_college: bool
+
+
+@router.get(
+    "/bookings/{outlook_booking_id:path}/get-attendee-details",
+    responses={400: {"description": "Invalid email"}, 404: {"description": "Booking not found OR details not found"}},
+)
+async def get_attendee_details(
+    outlook_booking_id: str,
+    user_email: EmailStr,
+    user: VerifiedDep,
+) -> AttendeeDetails:
+    logger.info(f"{user.email=} trying to get attendee details for {user_email} in booking {outlook_booking_id}")
+    if not (user_email.endswith("@innopolis.university") or user_email.endswith("@innopolis.ru")):
+        logger.warning(
+            f"{user.email=} trying to get attendee details for {user_email} in booking {outlook_booking_id} but email is not from Innopolis University"
+        )
+        raise HTTPException(400, "Invalid email")
+
+    searched_user = await inh_accounts.get_user(email=user_email)
+
+    if searched_user is None:
+        raise HTTPException(404, "Details not found")
+
+    name = None
+    email = None
+    telegram_username = None
+    is_staff = False
+    is_student = False
+    is_college = False
+
+    if searched_user.innopolis_info is not None:
+        email = searched_user.innopolis_info.email
+        name = searched_user.innopolis_info.name
+        is_staff = searched_user.innopolis_info.is_staff
+        is_student = searched_user.innopolis_info.is_student
+        is_college = searched_user.innopolis_info.is_college
+    if searched_user.telegram_info is not None:
+        telegram_username = searched_user.telegram_info.username
+
+    return AttendeeDetails(
+        name=name,
+        email=email,
+        telegram_username=telegram_username,
+        is_staff=is_staff,
+        is_student=is_student,
+        is_college=is_college,
     )
 
 
