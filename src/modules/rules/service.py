@@ -15,7 +15,7 @@ def can_book(
     end = to_msk(end)
 
     if start >= end:
-        return False, "Start must be before end"
+        return False, "Start must be before end."
 
     in_access_list = False  # TODO: Check access lists
     booking_longer_than_3_hours = end - start > datetime.timedelta(hours=3)
@@ -73,12 +73,12 @@ def _check_rules(
 ):  # TODO: test cases
     # Только staff и students имеют доступ к бронированию
     if highest_role == "none":
-        return False, "You can't book rooms"
+        return False, "You must be a student or staff to book rooms (college students can't book rooms)."
 
     if room.id == "309a" and in_access_list and booking_longer_than_3_hours:
-        return False, "309a can't be booked for more than 3 hours"
+        return False, "309a can't be booked for more than 3 hours."
 
-    # staff всегда имеет доступ к жёлтым и красным комнатам
+    # staff всегда имеет доступ к жёлтым и красным комнатам с неограниченной длиной брони
     if highest_role == "staff" and room.access_level in ["yellow", "red"]:
         return True, ""
 
@@ -86,7 +86,7 @@ def _check_rules(
         return True, ""
 
     if highest_role == "staff":
-        return False, "You can't book this room"
+        return False, "You don't have rights to book this room."
 
     # Студенты не могут бронировать комнаты больше чем на 3 часа
     if highest_role == "student" and booking_longer_than_3_hours:
@@ -94,21 +94,21 @@ def _check_rules(
             return True, ""
 
         if room.access_level == "yellow":
-            return False, "Students can't create booking for more than 3 hours"
+            return False, "Students can't create booking for more than 3 hours."
 
     if in_access_list:
         return True, ""
 
     if highest_role == "student" and room.access_level == "red":
-        return False, "Students can't book rooms with red access_level"
+        return False, "Students can't book rooms with red access level."
 
     if room.access_level == "yellow" and not room.restrict_daytime:
         return True, ""
 
     if room.access_level == "yellow" and room.restrict_daytime:
         if is_restricted_time:
-            return False, "Students can't book lecture rooms during working hours"
+            return False, "Students can't book lecture rooms during working hours."
         else:
             return True, ""
 
-    return False, "You can't book this room"
+    return False, "You don't have rights to book this room.."
