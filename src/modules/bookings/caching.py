@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -21,11 +22,13 @@ class CacheForBookings:
     ttl: datetime.timedelta
     max_slots_per_room: int
     cache: dict[str, list[CacheSlot]]
+    _lock: asyncio.Lock
 
     def __init__(self, ttl: datetime.timedelta | int, max_slots_per_room: int = 10):
         self.ttl = datetime.timedelta(seconds=ttl) if isinstance(ttl, int) else ttl
         self.max_slots_per_room = max_slots_per_room
         self.cache = {}
+        self._lock = asyncio.Lock()
 
     def _prune_expired(self, room_id: str, now: datetime.datetime) -> None:
         slots = self.cache.get(room_id)
@@ -44,15 +47,14 @@ class CacheForBookings:
         slots.sort(key=lambda s: s.timestamp)
         self.cache[room_id] = slots[-self.max_slots_per_room :]
 
-    def update_cache(
+    def _update_cache_impl(
         self,
         room_id: str,
         bookings: list[Booking],
         start: datetime.datetime,
         end: datetime.datetime,
-        now: datetime.datetime | None = None,
-    ):
-        now = now or datetime.datetime.now()
+        now: datetime.datetime,
+    ) -> None:
         slot = CacheSlot(
             bookings=[b.model_copy() for b in bookings],
             start=start,
@@ -65,25 +67,13 @@ class CacheForBookings:
         self._prune_expired(room_id, now)
         self._evict_oldest(room_id)
 
-    def update_cache_from_mapping(
-        self,
-        room_id_x_bookings: dict[str, list[Booking]],
-        start: datetime.datetime,
-        end: datetime.datetime,
-        now: datetime.datetime | None = None,
-    ):
-        now = now or datetime.datetime.now()
-        for room_id, bookings in room_id_x_bookings.items():
-            self.update_cache(room_id=room_id, bookings=bookings, start=start, end=end, now=now)
-
-    def get_cached_entry(
+    def _get_cached_entry_impl(
         self,
         room_id: str,
         start: datetime.datetime,
         end: datetime.datetime,
-        now: datetime.datetime | None = None,
+        now: datetime.datetime,
     ) -> CacheSlot | None:
-        now = now or datetime.datetime.now()
         slots = self.cache.get(room_id)
         if not slots:
             return None
@@ -101,19 +91,56 @@ class CacheForBookings:
                 )
         return None
 
-    def get_cached_bookings(
+    async def update_cache(
+        self,
+        room_id: str,
+        bookings: list[Booking],
+        start: datetime.datetime,
+        end: datetime.datetime,
+        now: datetime.datetime | None = None,
+    ) -> None:
+        now = now or datetime.datetime.now()
+        async with self._lock:
+            self._update_cache_impl(room_id, bookings, start, end, now)
+
+    async def update_cache_from_mapping(
+        self,
+        room_id_x_bookings: dict[str, list[Booking]],
+        start: datetime.datetime,
+        end: datetime.datetime,
+        now: datetime.datetime | None = None,
+    ) -> None:
+        now = now or datetime.datetime.now()
+        async with self._lock:
+            for room_id, bookings in room_id_x_bookings.items():
+                self._update_cache_impl(room_id, bookings, start, end, now)
+
+    async def get_cached_entry(
+        self,
+        room_id: str,
+        start: datetime.datetime,
+        end: datetime.datetime,
+        now: datetime.datetime | None = None,
+    ) -> CacheSlot | None:
+        now = now or datetime.datetime.now()
+        async with self._lock:
+            return self._get_cached_entry_impl(room_id, start, end, now)
+
+    async def get_cached_bookings(
         self,
         room_ids: Iterable[str],
         start: datetime.datetime,
         end: datetime.datetime,
         now: datetime.datetime | None = None,
     ) -> tuple[dict[str, list[Booking]], set[str]]:
+        now = now or datetime.datetime.now()
         room_x_cache: dict[str, list[Booking]] = {}
         cache_misses: set[str] = set()
-        for room_id in room_ids:
-            entry = self.get_cached_entry(room_id, start, end, now=now)
-            if entry is None:
-                cache_misses.add(room_id)
-            else:
-                room_x_cache[room_id] = entry.bookings
+        async with self._lock:
+            for room_id in room_ids:
+                entry = self._get_cached_entry_impl(room_id, start, end, now)
+                if entry is None:
+                    cache_misses.add(room_id)
+                else:
+                    room_x_cache[room_id] = entry.bookings
         return room_x_cache, cache_misses

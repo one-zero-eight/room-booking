@@ -81,6 +81,8 @@ class Settings(SettingBaseModel):
     "TTL for the bookings from account calendar cache in seconds"
     ttl_bookings_from_busy_info: int = 60
     "TTL for the bookings from busy info cache in seconds"
+    recently_canceled_booking_ttl_sec: int = 300
+    "TTL for the recently-canceled booking IDs cache in seconds (skip cancel if already canceled within this window)"
     cors_allow_origin_regex: str = ".*"
     "Allowed origins for CORS: from which domains requests to the API are allowed. Specify as a regex: `https://.*.innohassle.ru`"
     accounts: Accounts

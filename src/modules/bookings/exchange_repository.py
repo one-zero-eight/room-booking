@@ -48,7 +48,8 @@ class ExchangeBookingRepository:
     subscription_id: str | None
     watermark: str | None
     last_callback_time: float | None
-    pending_bookings_to_cancel: set[str] = set()
+    _recently_canceled: dict[str, float]  # id -> timestamp
+    _recently_canceled_lock: asyncio.Lock
 
     def __init__(self, ews_endpoint: str, account_email: str):
         self.ews_endpoint = ews_endpoint
@@ -70,6 +71,8 @@ class ExchangeBookingRepository:
         self.subscription_id = None
         self.watermark = None
         self.last_callback_time = None
+        self._recently_canceled = {}
+        self._recently_canceled_lock = asyncio.Lock()
 
         self._cache_from_busy_info = CacheForBookings(settings.ttl_bookings_from_busy_info)
         self._cache_from_account_calendar = CacheForBookings(settings.ttl_bookings_from_account_calendar)
@@ -117,7 +120,9 @@ class ExchangeBookingRepository:
 
         # ---- Get cached bookings ----
         if use_cache:
-            room_x_cached_bookings, cache_misses = self._cache_from_busy_info.get_cached_bookings(rooms_ids, start, end)
+            room_x_cached_bookings, cache_misses = await self._cache_from_busy_info.get_cached_bookings(
+                rooms_ids, start, end
+            )
 
             if not cache_misses:  # full cache hit
                 logger.info(f"Cache hit for bookings from busy info for rooms {rooms_ids}")
@@ -183,7 +188,7 @@ class ExchangeBookingRepository:
         # ^^^^^
 
         # ---- Cache bookings ----
-        self._cache_from_busy_info.update_cache_from_mapping(
+        await self._cache_from_busy_info.update_cache_from_mapping(
             room_id_x_bookings=room_id_x_bookings, start=start, end=end
         )
         # ^^^^^
@@ -204,7 +209,7 @@ class ExchangeBookingRepository:
 
         # ---- Get cached bookings ----
         if use_cache:
-            room_x_cached_bookings, cache_misses = self._cache_from_account_calendar.get_cached_bookings(
+            room_x_cached_bookings, cache_misses = await self._cache_from_account_calendar.get_cached_bookings(
                 rooms_ids, start, end
             )
 
@@ -257,7 +262,7 @@ class ExchangeBookingRepository:
         # ^^^^^
 
         # ---- Cache bookings ----
-        self._cache_from_account_calendar.update_cache_from_mapping(
+        await self._cache_from_account_calendar.update_cache_from_mapping(
             room_id_x_bookings=room_x_bookings, start=start, end=end
         )
         # ^^^^^
@@ -524,9 +529,19 @@ class ExchangeBookingRepository:
         return None
 
     async def cancel_booking(self, item: exchangelib.CalendarItem, email: str | None) -> bool:
+        item_id = str(item.id)
+        async with self._recently_canceled_lock:
+            now = time.monotonic()
+            self._recently_canceled = {
+                k: v for k, v in self._recently_canceled.items() if now - v < settings.recently_canceled_booking_ttl_sec
+            }
+            if item_id in self._recently_canceled:
+                return True
         await asyncio.to_thread(
             item.cancel, new_body=f"Canceled by {email}\nProvider: https://innohassle.ru/room-booking"
         )
+        async with self._recently_canceled_lock:
+            self._recently_canceled[item_id] = time.monotonic()
         return True
 
 

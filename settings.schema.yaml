@@ -173,6 +173,12 @@ properties:
     description: TTL for the bookings from busy info cache in seconds
     title: Ttl Bookings From Busy Info
     type: integer
+  recently_canceled_booking_ttl_sec:
+    default: 300
+    description: TTL for the recently-canceled booking IDs cache in seconds (skip
+      cancel if already canceled within this window)
+    title: Recently Canceled Booking Ttl Sec
+    type: integer
   cors_allow_origin_regex:
     default: .*
     description: 'Allowed origins for CORS: from which domains requests to the API
