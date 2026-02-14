@@ -78,7 +78,7 @@ async def ews_error_handler(
 last_callback_time: datetime.datetime | None = None
 
 
-@app.post("/ews-callback")
+@app.post("/ews-callback", include_in_schema=False)
 async def ews_callback(request: Request):
     """
     EWS callback endpoint for push subscription.
