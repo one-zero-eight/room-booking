@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException
 from src.api.dependencies import VerifiedDep
 from src.config_schema import Room
 from src.modules.bookings.exchange_repository import Booking, exchange_booking_repository
+from src.modules.bookings.service import set_related_to_me
 from src.modules.rooms.repository import room_repository
 
 router = APIRouter(tags=["Rooms"])
@@ -48,6 +49,5 @@ async def room_bookings_route(
     obj = room_repository.get_by_id(id)
     if obj is None:
         raise HTTPException(404, "Room not found")
-    return await exchange_booking_repository.get_booking_for_room(
-        room_id=id, from_dt=start, to_dt=end, user_email=user.email
-    )
+    bookings = await exchange_booking_repository.get_bookings_for_room(room_id=id, from_dt=start, to_dt=end)
+    return set_related_to_me(bookings, user.email)

@@ -365,7 +365,7 @@ class ExchangeBookingRepository:
 
         return bookings
 
-    async def get_booking_for_room(
+    async def get_bookings_for_room(
         self,
         room_id: str,
         from_dt: datetime.datetime,

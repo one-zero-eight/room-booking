@@ -23,6 +23,7 @@ from src.modules.bookings.service import (
     calendar_item_to_booking,
     get_emails_to_attendees_index,
     get_first_room_from_emails,
+    set_related_to_me,
 )
 from src.modules.inh_accounts_sdk import inh_accounts
 from src.modules.rooms.repository import room_repository
@@ -79,37 +80,25 @@ async def bookings(
 
     start, end = _default_date_range(start, end)
 
-    if room_ids and room_id and room_id not in room_ids:
-        room_ids.append(room_id)
+    room_ids_to_fetch: list[str] = []
 
-    if room_ids:
-        return await exchange_booking_repository.get_bookings_for_certain_rooms(
-            room_ids=room_ids,
-            from_dt=start,
-            to_dt=end,
-            user_email=user.email,
-        )
-    if room_id:
-        obj = room_repository.get_by_id(room_id)
-        if obj is None:
+    if not room_ids and not room_id:  # nothing provided, get all rooms
+        room_ids_to_fetch = [room.id for room in room_repository.get_all(include_red)]
+    elif room_id and not room_ids:  # only room id is provided
+        if room_repository.get_by_id(room_id) is None:
             raise HTTPException(404, "Room not found")
-        return await exchange_booking_repository.get_booking_for_room(
-            room_id=room_id,
-            from_dt=start,
-            to_dt=end,
-            user_email=user.email,
-        )
+        room_ids_to_fetch = [room_id]
+    elif room_id and room_ids:  # both room id and room ids are provided
+        room_ids_to_fetch = [room_id, *room_ids] if room_id not in room_ids else room_ids
+    elif room_ids:  # only room ids are provided
+        room_ids_to_fetch = room_ids
     else:
-        room_ids = [
-            room.id for room in room_repository.get_all(include_red) if room.access_level != "red" or include_red
-        ]
+        raise AssertionError("Invalid combination of room_id and room_ids, not even possible")
 
-        return await exchange_booking_repository.get_bookings_for_certain_rooms(
-            room_ids=room_ids,
-            from_dt=start,
-            to_dt=end,
-            user_email=user.email,
-        )
+    bookings = await exchange_booking_repository.get_bookings_for_certain_rooms(
+        room_ids=room_ids_to_fetch, from_dt=start, to_dt=end
+    )
+    return set_related_to_me(bookings, user.email)
 
 
 @router.get("/bookings/my")
@@ -123,7 +112,8 @@ async def my_bookings(
     ),
 ) -> list[Booking]:
     start, end = _default_date_range(start, end)
-    return await exchange_booking_repository.fetch_user_bookings(attendee_email=user.email, start=start, end=end)
+    bookings = await exchange_booking_repository.fetch_user_bookings(attendee_email=user.email, start=start, end=end)
+    return set_related_to_me(bookings, user.email)
 
 
 @router.post(
@@ -150,15 +140,15 @@ async def create_booking(user: VerifiedDep, request: CreateBookingRequest) -> Bo
     if not can:
         raise HTTPException(403, why)
 
-    return await exchange_booking_repository.create_booking(
+    booking = await exchange_booking_repository.create_booking(
         room=room,
         start=request.start,
         end=request.end,
         title=request.title,
         organizer=innohassle_user,
         participant_emails=request.participant_emails or [],
-        user_email=user.email,
     )
+    return set_related_to_me(booking, user.email)
 
 
 class AttendeeDetails(BaseModel):
@@ -229,7 +219,7 @@ async def get_booking(outlook_booking_id: str, user: VerifiedDep) -> Booking:
     if (booking := calendar_item_to_booking(calendar_item, user_email=user.email)) is None:
         raise HTTPException(404, "Room attendee not found in booking attendees")
 
-    return booking
+    return set_related_to_me(booking, user.email)
 
 
 @router.patch(
@@ -282,9 +272,7 @@ async def update_booking(
     if booking is None:
         raise HTTPException(404, "Booking not found after update")
 
-    booking.related_to_me = True
-
-    return booking
+    return set_related_to_me(booking, user.email)
 
 
 @router.delete(
@@ -331,8 +319,9 @@ async def get_user_bookings(
     if innohassle_user is None or innohassle_user.innopolis_sso is None:
         raise HTTPException(404, "User not found")
 
-    return await exchange_booking_repository.fetch_user_bookings(
+    bookings = await exchange_booking_repository.fetch_user_bookings(
         attendee_email=innohassle_user.innopolis_sso.email,
         start=start,
         end=end,
     )
+    return set_related_to_me(bookings, innohassle_user.innopolis_sso.email)

@@ -1,6 +1,6 @@
 import datetime
 from collections.abc import Iterable
-from typing import cast
+from typing import cast, overload
 
 import exchangelib
 import pytz
@@ -94,7 +94,20 @@ def calendar_item_to_booking(
     )
 
 
-def set_related_to_me_for_bookings(bookings: list[Booking] | Booking, user_email: str) -> None:
+@overload
+def set_related_to_me(bookings: list[Booking], user_email: str) -> list[Booking]: ...
+
+
+@overload
+def set_related_to_me(bookings: Booking, user_email: str) -> Booking: ...
+
+
+def set_related_to_me(bookings: list[Booking] | Booking, user_email: str) -> list[Booking] | Booking:
+    """
+    Set related_to_me field for bookings to True if the booking is related to the user, otherwise set it to False.
+    If the booking is not related to the user, set it to None. Note that original bookings are modified in place.
+    """
+
     if isinstance(bookings, Booking):
         bookings_to_set = [bookings]
     else:
@@ -110,3 +123,5 @@ def set_related_to_me_for_bookings(bookings: list[Booking] | Booking, user_email
                     break
             else:
                 booking.related_to_me = False
+
+    return bookings
