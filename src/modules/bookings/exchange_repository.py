@@ -164,7 +164,7 @@ class ExchangeBookingRepository:
         # ^^^^^
 
         # ---- Convert EWS CalendarEvents to ours Bookings ----
-        room_id_x_bookings: dict[str, list[Booking]] = defaultdict(list)
+        room_id_x_bookings: dict[str, list[Booking]] = {k: [] for k in rooms_ids}
         for room_id, room_calendar_events in room_id_x_calendar_events.items():
             for calendar_event in room_calendar_events:
                 title = "Busy"
@@ -236,7 +236,7 @@ class ExchangeBookingRepository:
         # ^^^^^
 
         # ---- Convert EWS CalendarItems to ours Bookings ----
-        room_x_bookings: dict[str, list[Booking]] = defaultdict(list)
+        room_x_bookings: dict[str, list[Booking]] = {k: [] for k in rooms_ids}
         for item in calendar_items:
             email_index = get_emails_to_attendees_index(item)
             room = get_first_room_from_emails(email_index)
