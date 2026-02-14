@@ -12,12 +12,8 @@ exchange:
   username: null
   password: null
 
-my_uni:
-  secret_token: null
-
 rooms:
   - id: "301"
     title: "Lecture Room 301"
     short_name: "301"
     resource_email: ""
-    my_uni_id: 1

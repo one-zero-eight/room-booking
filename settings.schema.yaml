@@ -56,25 +56,6 @@ $defs:
     - password
     title: Exchange
     type: object
-  MyUni:
-    additionalProperties: false
-    description: My University integration settings
-    properties:
-      api_url:
-        default: https://my.university.innopolis.ru/apiv1
-        description: URL of the My University API
-        title: Api Url
-        type: string
-      secret_token:
-        description: Secret token for My University API
-        format: password
-        title: Secret Token
-        type: string
-        writeOnly: true
-    required:
-    - secret_token
-    title: MyUni
-    type: object
   Room:
     additionalProperties: false
     description: Room description.
@@ -95,13 +76,6 @@ $defs:
         description: Email of the room resource
         title: Resource Email
         type: string
-      my_uni_id:
-        anyOf:
-        - type: integer
-        - type: 'null'
-        default: null
-        description: ID of room on My University portal
-        title: My Uni Id
       capacity:
         anyOf:
         - type: integer
@@ -181,14 +155,11 @@ properties:
     type: string
   accounts:
     $ref: '#/$defs/Accounts'
-  my_uni:
-    $ref: '#/$defs/MyUni'
   exchange:
     $ref: '#/$defs/Exchange'
 required:
 - api_key
 - accounts
-- my_uni
 - exchange
 title: Settings
 type: object

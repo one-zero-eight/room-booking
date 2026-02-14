@@ -5,7 +5,6 @@ from src.config_schema import Room
 class RoomsRepository:
     rooms: list[Room]
     room_by_id: dict[str, Room]
-    room_by_my_uni_id: dict[int, Room]
     room_by_email: dict[str, Room]
 
     def __init__(self, rooms: list[Room]):
@@ -21,9 +20,6 @@ class RoomsRepository:
 
     def get_by_ids(self, room_ids: list[str]) -> list[Room | None]:
         return [self.get_by_id(room_id) for room_id in room_ids]
-
-    def get_by_my_uni_id(self, my_uni_room_id: int) -> Room | None:
-        return self.room_by_my_uni_id.get(my_uni_room_id)
 
     def get_by_email(self, email: str) -> Room | None:
         return self.room_by_email.get(email)

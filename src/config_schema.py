@@ -26,8 +26,6 @@ class Room(SettingBaseModel):
     "Shorter version of room title"
     resource_email: str = Field(exclude=True)
     "Email of the room resource"
-    my_uni_id: int | None = None
-    "ID of room on My University portal"
     capacity: int | None = None
     "Room capacity, amount of people"
     access_level: Literal["yellow", "red", "special"] | None = None
@@ -43,15 +41,6 @@ class Accounts(SettingBaseModel):
     "URL of the Accounts API"
     api_jwt_token: SecretStr
     "JWT token for accessing the Accounts API as a service"
-
-
-class MyUni(SettingBaseModel):
-    """My University integration settings"""
-
-    api_url: str = "https://my.university.innopolis.ru/apiv1"
-    "URL of the My University API"
-    secret_token: SecretStr
-    "Secret token for My University API"
 
 
 class Exchange(SettingBaseModel):
@@ -87,8 +76,6 @@ class Settings(SettingBaseModel):
     "Allowed origins for CORS: from which domains requests to the API are allowed. Specify as a regex: `https://.*.innohassle.ru`"
     accounts: Accounts
     "InNoHassle Accounts integration settings"
-    my_uni: MyUni
-    "My University integration settings"
     exchange: Exchange
     "Exchange (Outlook) integration settings"
 
