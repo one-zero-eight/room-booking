@@ -1,16 +1,35 @@
+from collections import defaultdict
+
 from src.config import settings
-from src.config_schema import Room
+from src.config_schema import AccessToRoom, Room
 
 
 class RoomsRepository:
     rooms: list[Room]
     room_by_id: dict[str, Room]
     room_by_email: dict[str, Room]
+    access_lists: dict[str, list[AccessToRoom]]
+    email_x_access_list: dict[str, dict[str, AccessToRoom]]
+    "{user email x {room_id: AccessToRoom}}"
 
-    def __init__(self, rooms: list[Room]):
+    def __init__(self, rooms: list[Room], access_lists: dict[str, list[AccessToRoom]]):
         self.rooms = rooms
         self.room_by_id = {room.id: room for room in self.rooms}
         self.room_by_email = {room.resource_email: room for room in self.rooms}
+        self.access_lists = access_lists
+        self.email_x_access_list = defaultdict(dict)
+
+        for room_id, access_list in access_lists.items():
+            for access_to_room in access_list:
+                self.email_x_access_list[access_to_room.email][room_id] = access_to_room
+
+        self.validate_access_lists()
+
+    def validate_access_lists(self):
+        existing_room_ids = {room.id for room in self.rooms}
+        for room_id, access_list in self.access_lists.items():
+            if room_id not in existing_room_ids:
+                raise ValueError(f"Room {room_id} not found in rooms")
 
     def get_all(self, include_red: bool = False) -> list[Room]:
         return [room for room in self.rooms if room.access_level != "red" or include_red]
@@ -24,5 +43,14 @@ class RoomsRepository:
     def get_by_email(self, email: str) -> Room | None:
         return self.room_by_email.get(email)
 
+    def get_access_list_for_user(self, user_email: str) -> dict[str, AccessToRoom]:
+        return self.email_x_access_list.get(user_email, {})
 
-room_repository: RoomsRepository = RoomsRepository(settings.rooms)
+    def get_access_list_for_room(self, room_id: str) -> list[AccessToRoom]:
+        return self.access_lists.get(room_id, [])
+
+    def user_has_access_to_room(self, user_email: str, room_id: str) -> bool:
+        return room_id in self.email_x_access_list.get(user_email, {})
+
+
+room_repository: RoomsRepository = RoomsRepository(settings.rooms, settings.access_lists)

@@ -12,6 +12,15 @@ exchange:
   username: null
   password: null
 
+access_lists:
+  "309A": []
+  "108": []
+  "107": []
+  "106": []
+  "105": []
+  "300": []
+  "321": []
+
 rooms:
   - id: "301"
     title: "Lecture Room 301"

@@ -7,19 +7,53 @@ __all__ = ["router"]
 import datetime
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 from src.api.dependencies import VerifiedDep
-from src.config_schema import Room
+from src.config_schema import AccessToRoom, Room
 from src.modules.bookings.exchange_repository import Booking, exchange_booking_repository
 from src.modules.bookings.service import set_related_to_me
+from src.modules.inh_accounts_sdk import inh_accounts
 from src.modules.rooms.repository import room_repository
+from src.modules.rules.service import can_book
 
 router = APIRouter(tags=["Rooms"])
+
+
+class CanBookResponse(BaseModel):
+    can_book: bool
+    reason_why_cannot: str
 
 
 @router.get("/rooms/")
 async def rooms(_: VerifiedDep, include_red: bool = False) -> list[Room]:
     return room_repository.get_all(include_red)
+
+
+@router.get(
+    "/rooms/my-access-list",
+    responses={
+        200: {"description": "Rooms with special access"},
+    },
+)
+async def my_access_list(user: VerifiedDep) -> list[Room]:
+    """
+    Get rooms that the user has special access to (f.e. 309A or 108 lecture room).
+    """
+    room_ids = list(room_repository.get_access_list_for_user(user.email).keys())
+    rooms = room_repository.get_by_ids(room_ids)
+    rooms = list(filter(None, rooms))
+    return rooms
+
+
+@router.get("/rooms/all-access-lists", responses={200: {"description": "All access lists"}})
+async def all_access_lists(user: VerifiedDep) -> dict[str, list[AccessToRoom]]:
+    innohassle_user = await inh_accounts.get_user(innohassle_id=user.innohassle_id)
+    if innohassle_user is None:
+        raise HTTPException(404, "User not found")
+    if not innohassle_user.innohassle_admin:
+        raise HTTPException(403, "User is not an admin")
+    return room_repository.access_lists
 
 
 @router.get(
@@ -30,10 +64,36 @@ async def rooms(_: VerifiedDep, include_red: bool = False) -> list[Room]:
     },
 )
 async def room_route(id: str, _: VerifiedDep) -> Room:
-    obj = room_repository.get_by_id(id)
-    if obj is None:
+    room = room_repository.get_by_id(id)
+    if room is None:
         raise HTTPException(404, "Room not found")
-    return obj
+    return room
+
+
+@router.get(
+    "/room/{id}/can-book",
+    responses={
+        200: {"description": "Can book"},
+        403: {"description": "Invalid user"},
+        404: {"description": "Room not found"},
+    },
+)
+async def room_can_book_route(
+    id: str, user: VerifiedDep, start: datetime.datetime, end: datetime.datetime
+) -> CanBookResponse:
+    """
+    Check if the user can book a room for the given time range.
+    """
+    room = room_repository.get_by_id(id)
+    if room is None:
+        raise HTTPException(404, "Room not found")
+    innohassle_user = await inh_accounts.get_user(innohassle_id=user.innohassle_id)
+
+    if innohassle_user is None:
+        raise HTTPException(403, "Invalid user")
+
+    can, reason = can_book(user=innohassle_user.innopolis_info, room=room, start=start, end=end)
+    return CanBookResponse(can_book=can, reason_why_cannot=reason)
 
 
 @router.get(

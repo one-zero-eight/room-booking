@@ -34,6 +34,13 @@ class Room(SettingBaseModel):
     "Prohibit to book during working hours. True = this room is available only at night 19:00-8:00, or full day on weekends."
 
 
+class AccessToRoom(SettingBaseModel):
+    email: str
+    "Email of the user"
+    reason: str = ""
+    "Reason for access (f.e. 'Leader of 'one-zero-eight' club', or `Academic Tutorship`)"
+
+
 class Accounts(SettingBaseModel):
     """InNoHassle Accounts integration settings"""
 
@@ -68,6 +75,8 @@ class Settings(SettingBaseModel):
     "Secret key for accessing API by external services"
     rooms: list[Room] = []
     "List of rooms"
+    access_lists: dict[str, list[AccessToRoom]] = {}
+    "Dictionary of access lists (room id -> access list)"
     ttl_bookings_from_account_calendar: int = 60
     "TTL for the bookings from account calendar cache in seconds"
     ttl_bookings_from_busy_info: int = 60

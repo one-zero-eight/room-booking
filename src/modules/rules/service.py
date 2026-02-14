@@ -2,22 +2,26 @@ import datetime
 from typing import Literal
 
 from src.modules.bookings.exchange_repository import to_msk
-from src.modules.inh_accounts_sdk import UserInfoFromSSO
-from src.modules.rooms.repository import Room
+from src.modules.inh_accounts_sdk import InnopolisInfo
+from src.modules.rooms.repository import Room, room_repository
 
 type Role = Literal["none", "student", "staff"]
 
 
 def can_book(
-    *, user: UserInfoFromSSO, room: Room, start: datetime.datetime, end: datetime.datetime
-) -> tuple[bool, str]:
+    *,
+    user: InnopolisInfo,
+    room: Room,
+    start: datetime.datetime,
+    end: datetime.datetime,
+) -> tuple[bool, str]:  # TODO: add check against conflicts in the Outlook.
     start = to_msk(start)
     end = to_msk(end)
 
     if start >= end:
         return False, "Start must be before end."
 
-    in_access_list = False  # TODO: Check access lists
+    in_access_list = room_repository.user_has_access_to_room(user.email, room.id)
     booking_longer_than_3_hours = end - start > datetime.timedelta(hours=3)
 
     highest_role: Role = "none"
@@ -70,13 +74,13 @@ def _check_rules(
     highest_role: Role,
     in_access_list: bool,
     is_restricted_time: bool,
-):  # TODO: test cases
+) -> tuple[bool, str]:
     # Только staff и students имеют доступ к бронированию
     if highest_role == "none":
         return False, "You must be a student or staff to book rooms (college students can't book rooms)."
 
-    if room.id == "309a" and in_access_list and booking_longer_than_3_hours:
-        return False, "309a can't be booked for more than 3 hours."
+    if room.id == "309A" and in_access_list and booking_longer_than_3_hours:
+        return False, "309A can't be booked for more than 3 hours."
 
     # staff всегда имеет доступ к жёлтым и красным комнатам с неограниченной длиной брони
     if highest_role == "staff" and room.access_level in ["yellow", "red"]:

@@ -119,8 +119,7 @@ async def my_bookings(
 @router.post(
     "/bookings/",
     responses={
-        401: {"description": "Invalid user"},
-        403: {"description": "Room declined the booking"},
+        403: {"description": "Room declined the booking OR Invalid user"},
         404: {
             "description": "Room not found OR Booking was removed during booking OR Room attendee not found in booking attendees"
         },
@@ -133,10 +132,10 @@ async def create_booking(user: VerifiedDep, request: CreateBookingRequest) -> Bo
 
     innohassle_user = await inh_accounts.get_user(innohassle_id=user.innohassle_id)
 
-    if innohassle_user is None or innohassle_user.innopolis_sso is None:
-        raise HTTPException(401, "Invalid user")
+    if innohassle_user is None:
+        raise HTTPException(403, "Invalid user")
 
-    can, why = can_book(user=innohassle_user.innopolis_sso, room=room, start=request.start, end=request.end)
+    can, why = can_book(user=innohassle_user.innopolis_info, room=room, start=request.start, end=request.end)
     if not can:
         raise HTTPException(403, why)
 
@@ -148,7 +147,7 @@ async def create_booking(user: VerifiedDep, request: CreateBookingRequest) -> Bo
         organizer=innohassle_user,
         participant_emails=request.participant_emails or [],
     )
-    return set_related_to_me(booking, user.email)
+    return set_related_to_me(booking, innohassle_user.innopolis_info.email)
 
 
 class AttendeeDetails(BaseModel):
@@ -181,29 +180,13 @@ async def get_attendee_details(
     if searched_user is None:
         raise HTTPException(404, "Details not found")
 
-    name = None
-    email = None
-    telegram_username = None
-    is_staff = False
-    is_student = False
-    is_college = False
-
-    if searched_user.innopolis_info is not None:
-        email = searched_user.innopolis_info.email
-        name = searched_user.innopolis_info.name
-        is_staff = searched_user.innopolis_info.is_staff
-        is_student = searched_user.innopolis_info.is_student
-        is_college = searched_user.innopolis_info.is_college
-    if searched_user.telegram_info is not None:
-        telegram_username = searched_user.telegram_info.username
-
     return AttendeeDetails(
-        name=name,
-        email=email,
-        telegram_username=telegram_username,
-        is_staff=is_staff,
-        is_student=is_student,
-        is_college=is_college,
+        name=searched_user.innopolis_info.name,
+        email=searched_user.innopolis_info.email,
+        telegram_username=searched_user.telegram_info.username if searched_user.telegram_info else None,
+        is_staff=searched_user.innopolis_info.is_staff,
+        is_student=searched_user.innopolis_info.is_student,
+        is_college=searched_user.innopolis_info.is_college,
     )
 
 
@@ -225,7 +208,8 @@ async def get_booking(outlook_booking_id: str, user: VerifiedDep) -> Booking:
 @router.patch(
     "/bookings/{outlook_booking_id:path}",
     responses={
-        403: {"description": "You are not the participant of the booking"},
+        400: {"description": "Invalid booking"},
+        403: {"description": "You are not the participant of the booking OR Invalid user"},
         404: {"description": "Booking not found OR Room attendee not found in booking attendees"},
     },
 )
@@ -250,11 +234,11 @@ async def update_booking(
 
     innohassle_user = await inh_accounts.get_user(innohassle_id=user.innohassle_id)
 
-    if innohassle_user is None or innohassle_user.innopolis_sso is None:
-        raise HTTPException(401, "Invalid user")
+    if innohassle_user is None:
+        raise HTTPException(403, "Invalid user")
 
     can, why = can_book(
-        user=innohassle_user.innopolis_sso,
+        user=innohassle_user.innopolis_info,
         room=room,
         start=cast(datetime.datetime, request.start or booking.start),
         end=cast(datetime.datetime, request.end or booking.end),
@@ -316,12 +300,12 @@ async def get_user_bookings(
     except httpx.HTTPStatusError as e:
         raise HTTPException(e.response.status_code, e.response.json())
 
-    if innohassle_user is None or innohassle_user.innopolis_sso is None:
+    if innohassle_user is None:
         raise HTTPException(404, "User not found")
 
     bookings = await exchange_booking_repository.fetch_user_bookings(
-        attendee_email=innohassle_user.innopolis_sso.email,
+        attendee_email=innohassle_user.innopolis_info.email,
         start=start,
         end=end,
     )
-    return set_related_to_me(bookings, innohassle_user.innopolis_sso.email)
+    return set_related_to_me(bookings, innohassle_user.innopolis_info.email)

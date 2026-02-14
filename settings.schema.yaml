@@ -1,5 +1,22 @@
 $schema: https://json-schema.org/draft-07/schema
 $defs:
+  AccessToRoom:
+    additionalProperties: false
+    properties:
+      email:
+        description: Email of the user
+        title: Email
+        type: string
+      reason:
+        default: ''
+        description: Reason for access (f.e. 'Leader of 'one-zero-eight' club', or
+          `Academic Tutorship`)
+        title: Reason
+        type: string
+    required:
+    - email
+    title: AccessToRoom
+    type: object
   Accounts:
     additionalProperties: false
     description: InNoHassle Accounts integration settings
@@ -137,6 +154,15 @@ properties:
       $ref: '#/$defs/Room'
     title: Rooms
     type: array
+  access_lists:
+    additionalProperties:
+      items:
+        $ref: '#/$defs/AccessToRoom'
+      type: array
+    default: {}
+    description: Dictionary of access lists (room id -> access list)
+    title: Access Lists
+    type: object
   ttl_bookings_from_account_calendar:
     default: 60
     description: TTL for the bookings from account calendar cache in seconds
