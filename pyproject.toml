@@ -26,8 +26,19 @@ dependencies = [
     "uvicorn>=0.32.0",
 ]
 
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]
+
 [tool.uv.sources]
 requests-curl = { git = "https://github.com/paivett/requests-curl.git", rev = "82a7fc1" }
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+filterwarnings = [
+    "ignore:Core Pydantic V1 functionality isn't compatible with Python 3.14:UserWarning:fastapi.*",
+]
 
 [tool.ruff]
 line-length = 120

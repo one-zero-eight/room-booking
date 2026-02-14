@@ -15,15 +15,16 @@ import src.modules.bookings.patch_exchangelib  # noqa
 from src.api.logging_ import logger
 from src.config import settings
 from src.config_schema import Room
+from src.modules.bookings.caching import CacheForBookings
 from src.modules.bookings.schemas import Booking
 from src.modules.bookings.service import (
     calendar_item_to_booking,
     get_emails_to_attendees_index,
     get_first_room_attendee_from_emails,
     get_first_room_from_emails,
-    set_related_to_me_for_bookings,
     to_msk,
 )
+from src.modules.bookings.single_flight import SingleFlight
 from src.modules.inh_accounts_sdk import UserSchema
 from src.modules.rooms.repository import room_repository
 
@@ -70,6 +71,11 @@ class ExchangeBookingRepository:
         self.watermark = None
         self.last_callback_time = None
 
+        self._cache_from_busy_info = CacheForBookings(settings.ttl_bookings_from_busy_info)
+        self._cache_from_account_calendar = CacheForBookings(settings.ttl_bookings_from_account_calendar)
+        self._free_busy_single_flight = SingleFlight[dict[str, list[CalendarEvent]], AccountGetFreeBusyInfoArgs]()
+        self._calendar_view_single_flight = SingleFlight[list[exchangelib.CalendarItem], AccountCalendarViewArgs]()
+
     async def get_server_status(self) -> dict | None:
         try:
             t1 = time.monotonic()
@@ -98,26 +104,6 @@ class ExchangeBookingRepository:
 
             return (subscription_id, watermark)
 
-    _cache_bookings_from_busy_info: dict[
-        str,
-        tuple[list[Booking], datetime.datetime],
-    ] = {}
-
-    def _get_cached_bookings_from_busy_info(self, room_id: str) -> list[Booking] | None:
-        cached_bookings, cached_dt = self._cache_bookings_from_busy_info.get(room_id, (None, None))
-        if cached_bookings is not None and cached_dt is not None:
-            ttl = datetime.timedelta(seconds=settings.ttl_bookings_from_busy_info)
-            if datetime.datetime.now() - cached_dt < ttl:
-                return [c.model_copy() for c in cached_bookings]
-
-    _account_protocol_get_free_busy_info_task: (
-        tuple[
-            AccountGetFreeBusyInfoArgs,
-            asyncio.Task[dict[str, list[CalendarEvent]]],
-        ]
-        | None
-    ) = None
-
     async def _fetch_bookings_from_busy_info(
         self,
         rooms: list[Room],
@@ -127,20 +113,17 @@ class ExchangeBookingRepository:
         use_dedup: bool = True,
     ) -> dict[str, list[Booking]]:
         t_start = time.monotonic()
-        room_ids = {room.id for room in rooms}
+        rooms_ids = {room.id for room in rooms}
 
         # ---- Get cached bookings ----
         if use_cache:
-            room_x_cache: dict[str, list[Booking]] = {}
-            for room_id in room_ids:
-                if _cached_bookings := self._get_cached_bookings_from_busy_info(room_id):
-                    room_x_cache[room_id] = _cached_bookings
+            room_x_cached_bookings, cache_misses = self._cache_from_busy_info.get_cached_bookings(rooms_ids, start, end)
 
-            if room_ids.issubset(room_x_cache.keys()):  # cache hit
-                logger.info(f"Cache hit for bookings from busy info for rooms: {room_ids}")
-                return room_x_cache
-            else:
-                logger.info(f"Cache miss for bookings from busy info for rooms: {room_ids}")
+            if not cache_misses:  # full cache hit
+                logger.info(f"Cache hit for bookings from busy info for rooms {rooms_ids}")
+                return room_x_cached_bookings
+            else:  # TODO: request only subset of rooms that are not in cache
+                logger.info(f"Cache miss for bookings from busy info for rooms: {cache_misses}")
         # ^^^^^
 
         # ---- Fetch account free busy info with only one request at a time ----
@@ -153,16 +136,16 @@ class ExchangeBookingRepository:
             end=to_msk(end),
         )
 
-        def task_account_get_free_busy_info(args: AccountGetFreeBusyInfoArgs) -> dict[str, list[CalendarEvent]]:
-            account_free_busy_info = cast(
-                Iterable[FreeBusyView],
-                self.account.protocol.get_free_busy_info(
+        async def free_busy_task(args: AccountGetFreeBusyInfoArgs) -> dict[str, list[CalendarEvent]]:
+            account_free_busy_info = await asyncio.to_thread(
+                lambda: self.account.protocol.get_free_busy_info(
                     accounts=args["accounts"],
                     start=exchangelib.EWSDateTime.from_datetime(args["start"]),
                     end=exchangelib.EWSDateTime.from_datetime(args["end"]),
                     requested_view="Detailed",
                 ),
             )
+            account_free_busy_info = cast(Iterable[FreeBusyView], account_free_busy_info)
 
             room_id_x_calendar_events: dict[str, list[CalendarEvent]] = {}
 
@@ -175,30 +158,9 @@ class ExchangeBookingRepository:
 
             return room_id_x_calendar_events
 
-        try:
-            if not use_dedup or self._account_protocol_get_free_busy_info_task is None:
-                logger.info(
-                    f"Either dedup is disabled or no task is running, creating new task for time range: {args=}, {use_dedup=}"
-                )
-                task = asyncio.create_task(asyncio.to_thread(task_account_get_free_busy_info, args))
-                self._account_protocol_get_free_busy_info_task = (args, task)
-                room_id_x_calendar_events = await task
-            else:
-                existing_args, existing_task = self._account_protocol_get_free_busy_info_task
-
-                if existing_args == args and not existing_task.done():
-                    logger.info(
-                        f"Deduplicate calendar items for same time range, so we will use existing task: {args=}"
-                    )
-                    room_id_x_calendar_events = await existing_task
-                else:
-                    logger.info(f"New time range for calendar items, so we will create new task: {args=}")
-                    task = asyncio.create_task(asyncio.to_thread(task_account_get_free_busy_info, args))
-                    self._account_protocol_get_free_busy_info_task = (args, task)
-                    room_id_x_calendar_events = await task
-        except Exception:
-            self._account_protocol_get_free_busy_info_task = None
-            raise
+        room_id_x_calendar_events = await self._free_busy_single_flight.run(
+            args, lambda: asyncio.create_task(free_busy_task(args)), use_dedup=use_dedup
+        )
         # ^^^^^
 
         # ---- Convert EWS CalendarEvents to ours Bookings ----
@@ -221,32 +183,13 @@ class ExchangeBookingRepository:
         # ^^^^^
 
         # ---- Cache bookings ----
-        for room_id, room_bookings in room_id_x_bookings.items():
-            self._cache_bookings_from_busy_info[room_id] = (room_bookings, datetime.datetime.now())
+        self._cache_from_busy_info.update_cache_from_mapping(
+            room_id_x_bookings=room_id_x_bookings, start=start, end=end
+        )
         # ^^^^^
 
         logger.info(f"_fetch_bookings_from_busy_info took {time.monotonic() - t_start:.2f}s")
         return room_id_x_bookings
-
-    _cache_bookings_from_account_calendar: dict[
-        str,
-        tuple[list[Booking], datetime.datetime],
-    ] = {}
-
-    def _get_cached_bookings_from_account_calendar(self, room_id: str) -> list[Booking] | None:
-        cached_bookings, cached_dt = self._cache_bookings_from_account_calendar.get(room_id, (None, None))
-        if cached_bookings is not None and cached_dt is not None:
-            ttl = datetime.timedelta(seconds=settings.ttl_bookings_from_account_calendar)
-            if datetime.datetime.now() - cached_dt < ttl:
-                return [c.model_copy() for c in cached_bookings]
-
-    _account_calendar_view_task: (
-        tuple[
-            AccountCalendarViewArgs,
-            asyncio.Task[list[exchangelib.CalendarItem]],
-        ]
-        | None
-    ) = None
 
     async def _fetch_bookings_from_account_calendar(
         self,
@@ -261,53 +204,35 @@ class ExchangeBookingRepository:
 
         # ---- Get cached bookings ----
         if use_cache:
-            room_x_cache: dict[str, list[Booking]] = {}
-            for room_id in rooms_ids:
-                if _cached_bookings := self._get_cached_bookings_from_account_calendar(room_id):
-                    room_x_cache[room_id] = _cached_bookings
+            room_x_cached_bookings, cache_misses = self._cache_from_account_calendar.get_cached_bookings(
+                rooms_ids, start, end
+            )
 
-            if rooms_ids.issubset(room_x_cache.keys()):  # cache hit
+            if not cache_misses:  # full cache hit
                 logger.info(f"Cache hit for bookings from account calendar for rooms: {rooms_ids}")
-                return room_x_cache
-            else:
-                logger.info(f"Cache miss for bookings from account calendar for rooms: {rooms_ids}")
+                return room_x_cached_bookings
+            else:  # TODO: request only subset of rooms that are not in cache
+                logger.info(f"Cache miss for bookings from account calendar for rooms: {cache_misses}")
         # ^^^^^
 
         # ---- Fetch account calendar view with only one request at a time ----
         args = AccountCalendarViewArgs(start=to_msk(start), end=to_msk(end))
 
-        def task_account_calendar_view(args: AccountCalendarViewArgs) -> list[exchangelib.CalendarItem]:
-            return list(
-                self.account.calendar.view(
-                    exchangelib.EWSDateTime.from_datetime(args["start"]),
-                    exchangelib.EWSDateTime.from_datetime(args["end"]),
-                ).only("required_attendees", "subject", "start", "end", "id")
+        async def calendar_view_task(args: AccountCalendarViewArgs) -> list[exchangelib.CalendarItem]:
+            return await asyncio.to_thread(
+                lambda: list(
+                    self.account.calendar.view(
+                        exchangelib.EWSDateTime.from_datetime(args["start"]),
+                        exchangelib.EWSDateTime.from_datetime(args["end"]),
+                    ).only("required_attendees", "subject", "start", "end", "id")
+                )
             )
 
-        try:
-            if not use_dedup or self._account_calendar_view_task is None:
-                logger.info(
-                    f"Either dedup is disabled or no task is running, creating new task for time range: {args=}, {use_dedup=}"
-                )
-                task = asyncio.create_task(asyncio.to_thread(task_account_calendar_view, args))
-                self._account_calendar_view_task = (args, task)
-                calendar_items = await task
-            else:
-                existing_args, existing_task = self._account_calendar_view_task
-
-                if existing_args == args and not existing_task.done():
-                    logger.info(
-                        f"Deduplicate calendar items for same time range, so we will use existing task: {args=}"
-                    )
-                    calendar_items = await existing_task
-                else:
-                    logger.info(f"New time range for calendar items, so we will create new task: {args=}")
-                    task = asyncio.create_task(asyncio.to_thread(task_account_calendar_view, args))
-                    self._account_calendar_view_task = (args, task)
-                    calendar_items = await task
-        except Exception:
-            self._account_calendar_view_task = None
-            raise
+        calendar_items = await self._calendar_view_single_flight.run(
+            args,
+            lambda: asyncio.create_task(calendar_view_task(args)),
+            use_dedup=use_dedup,
+        )
         # ^^^^^
 
         # ---- Convert EWS CalendarItems to ours Bookings ----
@@ -332,8 +257,9 @@ class ExchangeBookingRepository:
         # ^^^^^
 
         # ---- Cache bookings ----
-        for room_id, room_bookings in room_x_bookings.items():
-            self._cache_bookings_from_account_calendar[room_id] = (room_bookings, datetime.datetime.now())
+        self._cache_from_account_calendar.update_cache_from_mapping(
+            room_id_x_bookings=room_x_bookings, start=start, end=end
+        )
         # ^^^^^
 
         logger.info(f"_fetch_bookings_from_account_calendar took {time.monotonic() - t_start:.2f}s")
@@ -343,7 +269,7 @@ class ExchangeBookingRepository:
         self, attendee_email: str, start: datetime.datetime, end: datetime.datetime
     ) -> list[Booking]:
         """
-        Fetch bookings from account calendar for all rooms for the given time range and filter out bookings that are not related to the user. Sets .related_to_me=True attribute for each booking.
+        Fetch bookings from account calendar for all rooms for the given time range and filter out bookings that are not related to the user.
         """
         bookings_from_account_calendar = await self._fetch_bookings_from_account_calendar(
             rooms=room_repository.get_all(include_red=False),
@@ -373,13 +299,12 @@ class ExchangeBookingRepository:
                 if user_attendee is None or user_attendee.status == "Decline":
                     continue
 
-                booking.related_to_me = True
                 user_bookings.append(booking)
 
         return user_bookings
 
     async def _fetch_bookings_both_from_account_calendar_and_busy_info(
-        self, room_ids: list[str], start: datetime.datetime, end: datetime.datetime, user_email: str | None
+        self, room_ids: list[str], start: datetime.datetime, end: datetime.datetime
     ) -> list[Booking]:
         rooms = room_repository.get_by_ids(room_ids)
         rooms = list(filter(None, rooms))
@@ -438,9 +363,6 @@ class ExchangeBookingRepository:
 
         bookings.sort(key=lambda x: x.start)
 
-        if user_email is not None:
-            set_related_to_me_for_bookings(bookings, user_email)
-
         return bookings
 
     async def get_booking_for_room(
@@ -448,26 +370,22 @@ class ExchangeBookingRepository:
         room_id: str,
         from_dt: datetime.datetime,
         to_dt: datetime.datetime,
-        user_email: str | None = None,
     ) -> list[Booking]:
         """
-        Get bookings for a specific room for the given time range. Automatically sets .related_to_me=True for bookings that contain the user's email in the attendees list.
+        Get bookings for a specific room for the given time range.
         """
-        return await self._fetch_bookings_both_from_account_calendar_and_busy_info(
-            [room_id], from_dt, to_dt, user_email
-        )
+        return await self._fetch_bookings_both_from_account_calendar_and_busy_info([room_id], from_dt, to_dt)
 
     async def get_bookings_for_certain_rooms(
         self,
         room_ids: list[str],
         from_dt: datetime.datetime,
         to_dt: datetime.datetime,
-        user_email: str | None = None,
     ) -> list[Booking]:
         """
-        Get bookings for certain rooms for the given time range. Automatically sets .related_to_me=True for bookings that contain the user's email in the attendees list.
+        Get bookings for certain rooms for the given time range.
         """
-        return await self._fetch_bookings_both_from_account_calendar_and_busy_info(room_ids, from_dt, to_dt, user_email)
+        return await self._fetch_bookings_both_from_account_calendar_and_busy_info(room_ids, from_dt, to_dt)
 
     async def create_booking(
         self,
@@ -477,10 +395,9 @@ class ExchangeBookingRepository:
         title: str,
         organizer: UserSchema,
         participant_emails: list[str],
-        user_email: str,
     ) -> Booking:
         """
-        Create a booking for a specific room. Automatically sets .related_to_me=True for the booking.
+        Create a booking for a specific room.
         May raise HTTPExceptions.
         """
         start = to_msk(start)
@@ -531,7 +448,7 @@ class ExchangeBookingRepository:
             if fetched is None:
                 raise HTTPException(404, "Booking was removed during booking")
 
-            booking = calendar_item_to_booking(fetched, room_id=room.id, user_email=user_email)
+            booking = calendar_item_to_booking(fetched, room_id=room.id)
             email_index = get_emails_to_attendees_index(fetched)
             room_attendee = email_index.get(room.resource_email)
 
@@ -562,7 +479,6 @@ class ExchangeBookingRepository:
         new_start: datetime.datetime | None = None,
         new_end: datetime.datetime | None = None,
         new_title: str | None = None,
-        user_email: str | None = None,
     ) -> Booking | None:
         item = await self.get_booking(item_id)
         if item is None:
@@ -604,7 +520,7 @@ class ExchangeBookingRepository:
             new_room_attendee = get_first_room_attendee_from_emails(new_email_index)
 
             if new_room_attendee.last_response_time != old_room_attendee.last_response_time:
-                return calendar_item_to_booking(new_item, user_email=user_email)
+                return calendar_item_to_booking(new_item)
         return None
 
     async def cancel_booking(self, item: exchangelib.CalendarItem, email: str | None) -> bool:
