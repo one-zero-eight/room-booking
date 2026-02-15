@@ -7,17 +7,25 @@ from collections.abc import Callable
 class SingleFlight[T, K]:
     """
     Run a task keyed by K. If another call with the same key is in progress,
-    await that task instead of starting a new one. Clear stored task on exception.
+    await that task instead of starting a new one. Supports many keys; each key
+    has at most one in-flight task. Keys are compared by key_eq (default ==).
+    Clear stored task on exception.
     """
 
-    _key: K | None
-    _task: asyncio.Task[T] | None
+    _pairs: list[tuple[K, asyncio.Task[T]]]
+    _key_eq: Callable[[K, K], bool]
     _lock: asyncio.Lock
 
-    def __init__(self) -> None:
-        self._key = None
-        self._task = None
+    def __init__(self, *, key_eq: Callable[[K, K], bool] | None = None) -> None:
+        self._pairs = []
+        self._key_eq = key_eq if key_eq is not None else (lambda a, b: a == b)
         self._lock = asyncio.Lock()
+
+    def _find(self, key: K) -> int:
+        for i, (k, _) in enumerate(self._pairs):
+            if self._key_eq(k, key):
+                return i
+        return -1
 
     async def run(
         self,
@@ -27,13 +35,20 @@ class SingleFlight[T, K]:
         use_dedup: bool = True,
     ) -> T:
         async with self._lock:
-            if not use_dedup or self._task is None or self._key != key or self._task.done():
-                self._key = key
-                self._task = create_task_func()
+            idx = self._find(key)
+            existing = self._pairs[idx][1] if idx >= 0 else None
+            if not use_dedup or existing is None or existing.done():
+                task = create_task_func()
+                if idx >= 0:
+                    self._pairs[idx] = (key, task)
+                else:
+                    self._pairs.append((key, task))
+            else:
+                task = existing
         try:
-            return await self._task
-        except BaseException:
+            return await task
+        finally:
             async with self._lock:
-                self._key = None
-                self._task = None
-            raise
+                idx = self._find(key)
+                if idx >= 0 and self._pairs[idx][1] is task:
+                    self._pairs.pop(idx)
