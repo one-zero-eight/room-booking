@@ -544,6 +544,16 @@ class ExchangeBookingRepository:
             self._recently_canceled[item_id] = time.monotonic()
         return True
 
+    async def is_recently_canceled(self, item_id: str) -> bool:
+        async with self._recently_canceled_lock:
+            now = time.monotonic()
+            canceled_at = self._recently_canceled.get(item_id)
+            if canceled_at is None:
+                return False
+            if (now - canceled_at) < settings.recently_canceled_booking_ttl_sec:
+                return True
+            return False
+
 
 exchange_booking_repository = ExchangeBookingRepository(
     ews_endpoint=settings.exchange.ews_endpoint,

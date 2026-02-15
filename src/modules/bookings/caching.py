@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+import time
 from collections.abc import Iterable
 from dataclasses import dataclass
 
@@ -11,30 +12,36 @@ class CacheSlot:
     bookings: list[Booking]
     start: datetime.datetime
     end: datetime.datetime
-    timestamp: datetime.datetime
+    timestamp: float  # time.monotonic()
 
 
 # Alias for backward compatibility; get_cached_entry returns a slot-shaped value.
 CacheEntry = CacheSlot
 
 
+def _ttl_to_seconds(ttl: datetime.timedelta | int) -> float:
+    if isinstance(ttl, int):
+        return float(ttl)
+    return ttl.total_seconds()
+
+
 class CacheForBookings:
-    ttl: datetime.timedelta
+    ttl_sec: float
     max_slots_per_room: int
     cache: dict[str, list[CacheSlot]]
     _lock: asyncio.Lock
 
-    def __init__(self, ttl: datetime.timedelta | int, max_slots_per_room: int = 10):
-        self.ttl = datetime.timedelta(seconds=ttl) if isinstance(ttl, int) else ttl
+    def __init__(self, ttl: "datetime.timedelta | int", max_slots_per_room: int = 10):
+        self.ttl_sec = _ttl_to_seconds(ttl)
         self.max_slots_per_room = max_slots_per_room
         self.cache = {}
         self._lock = asyncio.Lock()
 
-    def _prune_expired(self, room_id: str, now: datetime.datetime) -> None:
+    def _prune_expired(self, room_id: str, now: float) -> None:
         slots = self.cache.get(room_id)
         if not slots:
             return
-        valid = [s for s in slots if s.timestamp + self.ttl > now]
+        valid = [s for s in slots if s.timestamp + self.ttl_sec > now]
         if not valid:
             self.cache.pop(room_id, None)
         else:
@@ -53,7 +60,7 @@ class CacheForBookings:
         bookings: list[Booking],
         start: datetime.datetime,
         end: datetime.datetime,
-        now: datetime.datetime,
+        now: float,
     ) -> None:
         slot = CacheSlot(
             bookings=[b.model_copy() for b in bookings],
@@ -72,12 +79,12 @@ class CacheForBookings:
         room_id: str,
         start: datetime.datetime,
         end: datetime.datetime,
-        now: datetime.datetime,
+        now: float,
     ) -> CacheSlot | None:
         slots = self.cache.get(room_id)
         if not slots:
             return None
-        not_outdated = [s for s in slots if s.timestamp + self.ttl > now]
+        not_outdated = [s for s in slots if s.timestamp + self.ttl_sec > now]
         if not not_outdated:
             self.cache.pop(room_id, None)
             return None
@@ -97,9 +104,9 @@ class CacheForBookings:
         bookings: list[Booking],
         start: datetime.datetime,
         end: datetime.datetime,
-        now: datetime.datetime | None = None,
+        now: float | None = None,
     ) -> None:
-        now = now or datetime.datetime.now()
+        now = now if now is not None else time.monotonic()
         async with self._lock:
             self._update_cache_impl(room_id, bookings, start, end, now)
 
@@ -108,9 +115,9 @@ class CacheForBookings:
         room_id_x_bookings: dict[str, list[Booking]],
         start: datetime.datetime,
         end: datetime.datetime,
-        now: datetime.datetime | None = None,
+        now: float | None = None,
     ) -> None:
-        now = now or datetime.datetime.now()
+        now = now if now is not None else time.monotonic()
         async with self._lock:
             for room_id, bookings in room_id_x_bookings.items():
                 self._update_cache_impl(room_id, bookings, start, end, now)
@@ -120,9 +127,9 @@ class CacheForBookings:
         room_id: str,
         start: datetime.datetime,
         end: datetime.datetime,
-        now: datetime.datetime | None = None,
+        now: float | None = None,
     ) -> CacheSlot | None:
-        now = now or datetime.datetime.now()
+        now = now if now is not None else time.monotonic()
         async with self._lock:
             return self._get_cached_entry_impl(room_id, start, end, now)
 
@@ -131,9 +138,9 @@ class CacheForBookings:
         room_ids: Iterable[str],
         start: datetime.datetime,
         end: datetime.datetime,
-        now: datetime.datetime | None = None,
+        now: float | None = None,
     ) -> tuple[dict[str, list[Booking]], set[str]]:
-        now = now or datetime.datetime.now()
+        now = now if now is not None else time.monotonic()
         room_x_cache: dict[str, list[Booking]] = {}
         cache_misses: set[str] = set()
         async with self._lock:

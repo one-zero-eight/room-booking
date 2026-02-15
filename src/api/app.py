@@ -119,6 +119,8 @@ async def ews_callback(request: Request):
 
             if isinstance(event, ModifiedEvent):
                 if event.item_id is not None:
+                    if await exchange_booking_repository.is_recently_canceled(event.item_id.id):
+                        logger.info(f"Booking {event.item_id.id} was recently canceled, so we skipping")
                     booking = await exchange_booking_repository.get_booking(event.item_id.id)
                     if booking is None:
                         logger.warning("Booking not found")
