@@ -78,6 +78,7 @@ class ExchangeBookingRepository:
         self._cache_from_account_calendar = CacheForBookings(settings.ttl_bookings_from_account_calendar)
         self._free_busy_single_flight = SingleFlight[dict[str, list[CalendarEvent]], AccountGetFreeBusyInfoArgs]()
         self._calendar_view_single_flight = SingleFlight[list[exchangelib.CalendarItem], AccountCalendarViewArgs]()
+        self._cancel_single_flight = SingleFlight[bool, str]()
 
     async def get_server_status(self) -> dict | None:
         try:
@@ -537,12 +538,16 @@ class ExchangeBookingRepository:
             }
             if item_id in self._recently_canceled:
                 return True
-        await asyncio.to_thread(
-            item.cancel, new_body=f"Canceled by {email}\nProvider: https://innohassle.ru/room-booking"
-        )
-        async with self._recently_canceled_lock:
-            self._recently_canceled[item_id] = time.monotonic()
-        return True
+
+        async def cancel_task() -> bool:
+            await asyncio.to_thread(
+                item.cancel, new_body=f"Canceled by {email}\nProvider: https://innohassle.ru/room-booking"
+            )
+            async with self._recently_canceled_lock:
+                self._recently_canceled[item_id] = time.monotonic()
+            return True
+
+        return await self._cancel_single_flight.run(item_id, lambda: asyncio.create_task(cancel_task()))
 
     async def is_recently_canceled(self, item_id: str) -> bool:
         async with self._recently_canceled_lock:
