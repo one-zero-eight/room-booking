@@ -172,7 +172,17 @@ class CacheForBookings:
                 # Two time ranges overlap if: slot.start < booking.end AND booking.start < slot.end
                 if slot.start < booking.end and booking.start < slot.end:
                     # Check if booking is not already in the slot
-                    if not any(b.outlook_booking_id == booking.outlook_booking_id for b in slot.bookings):
+                    # For bookings with outlook_booking_id, match by ID
+                    # For bookings without outlook_booking_id (free busy info), match by (room_id, start, end)
+                    if booking.outlook_booking_id is not None:
+                        is_duplicate = any(b.outlook_booking_id == booking.outlook_booking_id for b in slot.bookings)
+                    else:
+                        is_duplicate = any(
+                            b.room_id == booking.room_id and b.start == booking.start and b.end == booking.end
+                            for b in slot.bookings
+                        )
+                    
+                    if not is_duplicate:
                         slot.bookings.append(booking.model_copy())
                         # Keep bookings sorted by start time
                         slot.bookings.sort(key=lambda b: b.start)

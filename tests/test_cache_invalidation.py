@@ -125,6 +125,28 @@ async def test_add_booking_to_cache_no_cache_for_room():
 
 
 @pytest.mark.anyio
+async def test_add_booking_to_cache_no_duplicate_without_outlook_id():
+    """Test that bookings without outlook_booking_id are deduplicated by (room_id, start, end)"""
+    cache = CacheForBookings(ttl=3600)
+    # Create bookings without outlook_booking_id (like free busy info)
+    b1 = _booking(room_id="r1", outlook_booking_id=None, start_offset=0, end_offset=3600)
+    b2 = _booking(room_id="r1", outlook_booking_id=None, start_offset=0, end_offset=3600)  # Same time as b1
+
+    start = datetime.datetime(2025, 2, 14, 9, 0, tzinfo=datetime.UTC)
+    end = datetime.datetime(2025, 2, 14, 12, 0, tzinfo=datetime.UTC)
+    now = 1000.0
+
+    await cache.update_cache("r1", [b1], start, end, now=now)
+    # Try to add the same booking again (same room_id, start, end)
+    await cache.add_booking_to_cache(b2, now=now)
+
+    entry = await cache.get_cached_entry("r1", start, end, now=now)
+    assert entry is not None
+    # Should still only have one booking since b2 is a duplicate
+    assert len(entry.bookings) == 1
+
+
+@pytest.mark.anyio
 async def test_remove_booking_from_cache():
     cache = CacheForBookings(ttl=3600)
     b1 = _booking(room_id="r1", outlook_booking_id="oid-1")
