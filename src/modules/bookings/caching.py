@@ -181,7 +181,7 @@ class CacheForBookings:
                             b.room_id == booking.room_id and b.start == booking.start and b.end == booking.end
                             for b in slot.bookings
                         )
-                    
+
                     if not is_duplicate:
                         slot.bookings.append(booking.model_copy())
                         # Keep bookings sorted by start time
