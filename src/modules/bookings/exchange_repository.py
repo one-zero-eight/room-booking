@@ -497,9 +497,6 @@ class ExchangeBookingRepository:
 
         if booking is None:
             raise HTTPException(404, "Room attendee not found in booking attendees")
-        # Update cache immediately after successful booking creation
-        await self._cache_from_account_calendar.add_booking_to_cache(booking)
-        await self._cache_from_busy_info.add_booking_to_cache(booking)
         return booking
 
     async def get_booking(self, item_id: str) -> exchangelib.CalendarItem | None:
@@ -522,8 +519,6 @@ class ExchangeBookingRepository:
 
         email_index = get_emails_to_attendees_index(item)
         old_room_attendee = get_first_room_attendee_from_emails(email_index)
-        room = get_first_room_from_emails(email_index.keys())
-        room_id = room.id if room else None
 
         update_fields = []
         if new_start is not None:
@@ -561,9 +556,9 @@ class ExchangeBookingRepository:
                 updated_booking = calendar_item_to_booking(new_item)
                 # Update cache immediately after successful booking update
                 # Remove old booking and add updated one
-                if room_id and updated_booking:
-                    await self._cache_from_account_calendar.remove_booking_from_cache(room_id, item_id)
-                    await self._cache_from_busy_info.remove_booking_from_cache(room_id, item_id)
+                if updated_booking:
+                    await self._cache_from_account_calendar.remove_booking_from_cache(item_id)
+                    await self._cache_from_busy_info.remove_booking_from_cache(item_id)
                     await self._cache_from_account_calendar.add_booking_to_cache(updated_booking)
                     await self._cache_from_busy_info.add_booking_to_cache(updated_booking)
                 return updated_booking
@@ -571,10 +566,6 @@ class ExchangeBookingRepository:
 
     async def cancel_booking(self, item: exchangelib.CalendarItem, email: str | None) -> bool:
         item_id = str(item.id)
-        # Get room_id before canceling for cache invalidation
-        email_index = get_emails_to_attendees_index(item)
-        room = get_first_room_from_emails(email_index.keys())
-        room_id = room.id if room else None
 
         async with self._recently_canceled_lock:
             now = time.monotonic()
@@ -591,9 +582,8 @@ class ExchangeBookingRepository:
             async with self._recently_canceled_lock:
                 self._recently_canceled[item_id] = time.monotonic()
             # Remove booking from cache immediately after successful cancellation
-            if room_id:
-                await self._cache_from_account_calendar.remove_booking_from_cache(room_id, item_id)
-                await self._cache_from_busy_info.remove_booking_from_cache(room_id, item_id)
+            await self._cache_from_account_calendar.remove_booking_from_cache(item_id)
+            await self._cache_from_busy_info.remove_booking_from_cache(item_id)
             return True
 
         return await self._cancel_single_flight.run(item_id, lambda: asyncio.create_task(cancel_task()))

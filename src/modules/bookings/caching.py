@@ -177,23 +177,16 @@ class CacheForBookings:
                         # Keep bookings sorted by start time
                         slot.bookings.sort(key=lambda b: b.start)
 
-    async def remove_booking_from_cache(
-        self, room_id: str, outlook_booking_id: str, now: float | None = None
-    ) -> None:
+    async def remove_booking_from_cache(self, outlook_booking_id: str) -> None:
         """
-        Remove a booking from all cache slots for a given room.
+        Remove a booking from all cache slots across all rooms.
         This allows immediate cache updates after booking cancellation.
+        Since outlook_booking_id is unique, we search across all rooms.
         
         Args:
-            room_id: The room ID to remove the booking from
             outlook_booking_id: The Outlook booking ID to remove
-            now: Optional timestamp for consistency with other cache methods (not currently used for TTL checks)
         """
-        now = now if now is not None else time.monotonic()
         async with self._lock:
-            slots = self.cache.get(room_id)
-            if not slots:
-                return
-
-            for slot in slots:
-                slot.bookings = [b for b in slot.bookings if b.outlook_booking_id != outlook_booking_id]
+            for room_id, slots in self.cache.items():
+                for slot in slots:
+                    slot.bookings = [b for b in slot.bookings if b.outlook_booking_id != outlook_booking_id]
