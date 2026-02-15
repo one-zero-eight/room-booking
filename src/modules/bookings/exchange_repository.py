@@ -561,14 +561,9 @@ class ExchangeBookingRepository:
                 updated_booking = calendar_item_to_booking(new_item)
                 # Update cache immediately after successful booking update
                 # Remove old booking and add updated one
-                if updated_booking:
-                    # For account calendar, use outlook_booking_id
-                    await self._cache_from_account_calendar.remove_booking_from_cache(outlook_booking_id=item_id)
-                    # For free busy info, use old booking's (room_id, start, end) since they don't have outlook_booking_id
-                    if old_booking:
-                        await self._cache_from_busy_info.remove_booking_from_cache(
-                            room_id=old_booking.room_id, booking=old_booking
-                        )
+                if updated_booking and old_booking:
+                    await self._cache_from_account_calendar.remove_booking_from_cache(old_booking)
+                    await self._cache_from_busy_info.remove_booking_from_cache(old_booking)
                     await self._cache_from_account_calendar.add_booking_to_cache(updated_booking)
                     await self._cache_from_busy_info.add_booking_to_cache(updated_booking)
                 return updated_booking
@@ -594,13 +589,9 @@ class ExchangeBookingRepository:
             async with self._recently_canceled_lock:
                 self._recently_canceled[item_id] = time.monotonic()
             # Remove booking from cache immediately after successful cancellation
-            # For account calendar, use outlook_booking_id
-            await self._cache_from_account_calendar.remove_booking_from_cache(outlook_booking_id=item_id)
-            # For free busy info, use (room_id, start, end) since they don't have outlook_booking_id
             if booking:
-                await self._cache_from_busy_info.remove_booking_from_cache(
-                    room_id=booking.room_id, booking=booking
-                )
+                await self._cache_from_account_calendar.remove_booking_from_cache(booking)
+                await self._cache_from_busy_info.remove_booking_from_cache(booking)
             return True
 
         return await self._cancel_single_flight.run(item_id, lambda: asyncio.create_task(cancel_task()))
