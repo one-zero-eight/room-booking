@@ -156,6 +156,10 @@ class CacheForBookings:
         """
         Add a booking to all cache slots that overlap with the booking's time range.
         This allows immediate cache updates after booking creation.
+        
+        Args:
+            booking: The booking to add to cache
+            now: Optional timestamp for consistency with other cache methods (not currently used for TTL checks)
         """
         now = now if now is not None else time.monotonic()
         async with self._lock:
@@ -179,6 +183,11 @@ class CacheForBookings:
         """
         Remove a booking from all cache slots for a given room.
         This allows immediate cache updates after booking cancellation.
+        
+        Args:
+            room_id: The room ID to remove the booking from
+            outlook_booking_id: The Outlook booking ID to remove
+            now: Optional timestamp for consistency with other cache methods (not currently used for TTL checks)
         """
         now = now if now is not None else time.monotonic()
         async with self._lock:
