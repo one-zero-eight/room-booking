@@ -176,9 +176,15 @@ class ExchangeBookingRepository:
         # ---- Convert EWS CalendarEvents to ours Bookings ----
         room_id_x_bookings: dict[str, list[Booking]] = {k: [] for k in rooms_ids}
         for room_id, room_calendar_events in room_id_x_calendar_events.items():
+            room = room_repository.get_by_id(room_id)
+
             for calendar_event in room_calendar_events:
                 title = "Busy"
                 email_in_location = None
+                attendee = []
+
+                if room is not None:
+                    attendee.append(Attendee(email=room.resource_email, status=None, assosiated_room_id=room.id))
 
                 if calendar_event.details is not None:
                     if calendar_event.details.subject is not None:
@@ -188,6 +194,7 @@ class ExchangeBookingRepository:
                         match = EMAIL_IN_LOCATION_RE.search(location)
                         if match is not None:
                             email_in_location = match.group(1)
+                            attendee.append(Attendee(email=email_in_location, status=None, assosiated_room_id=None))
 
                 room_id_x_bookings[room_id].append(
                     Booking(
@@ -196,9 +203,8 @@ class ExchangeBookingRepository:
                         start=to_msk(cast(datetime.datetime, calendar_event.start)),
                         end=to_msk(cast(datetime.datetime, calendar_event.end)),
                         outlook_booking_id=None,
-                        attendees=[Attendee(email=email_in_location, status=None, assosiated_room_id=None)]
-                        if email_in_location is not None
-                        else None,
+                        attendees=attendee or None,
+                        # busy info doesn't contain attendees info, we can fetch it from account calendar if needed. Although, we know that room is always in the attendees list, and we can parse organizer email from location.
                     )
                 )
         # ^^^^^
