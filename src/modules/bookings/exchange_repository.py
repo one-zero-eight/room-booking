@@ -461,6 +461,7 @@ class ExchangeBookingRepository:
             room_attendee = email_index.get(room.resource_email)
 
             if room_attendee is None or room_attendee.response_type == "Decline":
+                await self.cancel_booking(fetched, email=organizer.innopolis_info.email)
                 raise HTTPException(403, "Booking was declined by the room")
 
             if room_attendee.last_response_time is not None:
