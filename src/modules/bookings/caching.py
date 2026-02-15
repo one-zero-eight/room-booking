@@ -170,10 +170,19 @@ class CacheForBookings:
                 # Two time ranges overlap if: slot.start < booking.end AND booking.start < slot.end
                 if slot.start < booking.end and booking.start < slot.end:
                     # Check if booking is not already in the slot
-                    # Match by both outlook_booking_id (if available) and (room_id, start, end)
+                    # A booking matches if it has the same (room_id, start, end)
+                    # AND (if both have outlook_booking_id, they must match)
                     is_duplicate = any(
-                        (b.outlook_booking_id is not None and b.outlook_booking_id == booking.outlook_booking_id)
-                        or (b.room_id == booking.room_id and b.start == booking.start and b.end == booking.end)
+                        b.room_id == booking.room_id 
+                        and b.start == booking.start 
+                        and b.end == booking.end
+                        and (
+                            # If either has no outlook_booking_id, consider it a match by time only
+                            b.outlook_booking_id is None 
+                            or booking.outlook_booking_id is None
+                            # If both have outlook_booking_id, they must match
+                            or b.outlook_booking_id == booking.outlook_booking_id
+                        )
                         for b in slot.bookings
                     )
 
@@ -187,8 +196,8 @@ class CacheForBookings:
         Remove a booking from all cache slots across all rooms.
         This allows immediate cache updates after booking cancellation.
         
-        Matches bookings by both outlook_booking_id (if available) and (room_id, start, end) tuple
-        to ensure the booking is removed regardless of which matching strategy works.
+        Matches bookings by (room_id, start, end) tuple, and if both have outlook_booking_id,
+        they must also match on that to ensure we're removing the correct booking.
         
         Args:
             booking: The booking object to remove
@@ -201,11 +210,16 @@ class CacheForBookings:
                         b
                         for b in slot.bookings
                         if not (
-                            # Match by outlook_booking_id if both have it
-                            (b.outlook_booking_id is not None 
-                             and booking.outlook_booking_id is not None 
-                             and b.outlook_booking_id == booking.outlook_booking_id)
-                            # OR match by (room_id, start, end)
-                            or (b.room_id == booking.room_id and b.start == booking.start and b.end == booking.end)
+                            # Must match on (room_id, start, end)
+                            b.room_id == booking.room_id 
+                            and b.start == booking.start 
+                            and b.end == booking.end
+                            and (
+                                # If either has no outlook_booking_id, match by time only
+                                b.outlook_booking_id is None 
+                                or booking.outlook_booking_id is None
+                                # If both have outlook_booking_id, they must match
+                                or b.outlook_booking_id == booking.outlook_booking_id
+                            )
                         )
                     ]
