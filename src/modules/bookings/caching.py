@@ -151,3 +151,40 @@ class CacheForBookings:
                 else:
                     room_x_cache[room_id] = entry.bookings
         return room_x_cache, cache_misses
+
+    async def add_booking_to_cache(self, booking: Booking, now: float | None = None) -> None:
+        """
+        Add a booking to all cache slots that overlap with the booking's time range.
+        This allows immediate cache updates after booking creation.
+        """
+        now = now if now is not None else time.monotonic()
+        async with self._lock:
+            slots = self.cache.get(booking.room_id)
+            if not slots:
+                return
+
+            for slot in slots:
+                # Check if this slot overlaps with the booking time range
+                # Two time ranges overlap if: slot.start < booking.end AND booking.start < slot.end
+                if slot.start < booking.end and booking.start < slot.end:
+                    # Check if booking is not already in the slot
+                    if not any(b.outlook_booking_id == booking.outlook_booking_id for b in slot.bookings):
+                        slot.bookings.append(booking.model_copy())
+                        # Keep bookings sorted by start time
+                        slot.bookings.sort(key=lambda b: b.start)
+
+    async def remove_booking_from_cache(
+        self, room_id: str, outlook_booking_id: str, now: float | None = None
+    ) -> None:
+        """
+        Remove a booking from all cache slots for a given room.
+        This allows immediate cache updates after booking cancellation.
+        """
+        now = now if now is not None else time.monotonic()
+        async with self._lock:
+            slots = self.cache.get(room_id)
+            if not slots:
+                return
+
+            for slot in slots:
+                slot.bookings = [b for b in slot.bookings if b.outlook_booking_id != outlook_booking_id]
