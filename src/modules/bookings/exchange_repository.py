@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+import re
 import time
 from collections import defaultdict
 from collections.abc import Iterable
@@ -16,7 +17,7 @@ from src.api.logging_ import logger
 from src.config import settings
 from src.config_schema import Room
 from src.modules.bookings.caching import CacheForBookings
-from src.modules.bookings.schemas import Booking
+from src.modules.bookings.schemas import Attendee, Booking
 from src.modules.bookings.service import (
     calendar_item_to_booking,
     get_emails_to_attendees_index,
@@ -27,6 +28,9 @@ from src.modules.bookings.service import (
 from src.modules.bookings.single_flight import SingleFlight
 from src.modules.inh_accounts_sdk import UserSchema
 from src.modules.rooms.repository import room_repository
+
+# Location format: "Room title (user@innopolis.university)" or "... (user@innopolis.ru)"
+EMAIL_IN_LOCATION_RE = re.compile(r"\(([^)]+@(?:innopolis\.university|innopolis\.ru))\)")
 
 
 class AccountCalendarViewArgs(TypedDict):
@@ -174,8 +178,17 @@ class ExchangeBookingRepository:
         for room_id, room_calendar_events in room_id_x_calendar_events.items():
             for calendar_event in room_calendar_events:
                 title = "Busy"
-                if calendar_event.details is not None and calendar_event.details.subject is not None:
-                    title = calendar_event.details.subject
+                email_in_location = None
+
+                if calendar_event.details is not None:
+                    if calendar_event.details.subject is not None:
+                        title = calendar_event.details.subject
+                    if calendar_event.details.location is not None:
+                        location = calendar_event.details.location
+                        match = EMAIL_IN_LOCATION_RE.search(location)
+                        if match is not None:
+                            email_in_location = match.group(1)
+
                 room_id_x_bookings[room_id].append(
                     Booking(
                         room_id=room_id,
@@ -183,7 +196,9 @@ class ExchangeBookingRepository:
                         start=calendar_event.start,
                         end=calendar_event.end,
                         outlook_booking_id=None,
-                        attendees=None,  # busy info doesn't contain attendees info, we can fetch it from account calendar if needed
+                        attendees=[Attendee(email=email_in_location, status=None, assosiated_room_id=None)]
+                        if email_in_location is not None
+                        else None,
                     )
                 )
         # ^^^^^
