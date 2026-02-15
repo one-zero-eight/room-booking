@@ -53,7 +53,7 @@ router = APIRouter(
 
 @router.get(
     "/bookings/",
-    responses={404: {"description": "Room not found"}},
+    responses={400: {"description": "Start must be before end"}, 404: {"description": "Room not found"}},
 )
 async def bookings(
     user: VerifiedDep,
@@ -79,6 +79,8 @@ async def bookings(
     """
 
     start, end = _default_date_range(start, end)
+    if start >= end:
+        raise HTTPException(400, "Start must be before end")
 
     room_ids_to_fetch: list[str] = []
 
@@ -112,6 +114,8 @@ async def my_bookings(
     ),
 ) -> list[Booking]:
     start, end = _default_date_range(start, end)
+    if start >= end:
+        raise HTTPException(400, "Start must be before end")
     bookings = await exchange_booking_repository.fetch_user_bookings(attendee_email=user.email, start=start, end=end)
     return set_related_to_me(bookings, user.email)
 
@@ -119,6 +123,7 @@ async def my_bookings(
 @router.post(
     "/bookings/",
     responses={
+        400: {"description": "Start must be before end"},
         403: {"description": "Room declined the booking OR Invalid user"},
         404: {
             "description": "Room not found OR Booking was removed during booking OR Room attendee not found in booking attendees"
@@ -126,6 +131,8 @@ async def my_bookings(
     },
 )
 async def create_booking(user: VerifiedDep, request: CreateBookingRequest) -> Booking:
+    if request.start >= request.end:
+        raise HTTPException(400, "Start must be before end")
     room = room_repository.get_by_id(room_id=request.room_id)
     if room is None:
         raise HTTPException(404, "Room not found")
@@ -281,7 +288,7 @@ async def delete_booking(user: VerifiedDep, outlook_booking_id: str):
 
 @router.get(
     "/user/{user_id}/bookings",
-    responses={404: {"description": "User not found"}},
+    responses={400: {"description": "Start must be before end"}, 404: {"description": "User not found"}},
 )
 async def get_user_bookings(
     user_id: str,
@@ -294,6 +301,8 @@ async def get_user_bookings(
     ),
 ) -> list[Booking]:
     start, end = _default_date_range(start, end)
+    if start >= end:
+        raise HTTPException(400, "Start must be before end")
 
     try:
         innohassle_user = await inh_accounts.get_user(innohassle_id=user_id)

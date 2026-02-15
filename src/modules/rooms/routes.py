@@ -74,6 +74,7 @@ async def room_route(id: str, _: VerifiedDep) -> Room:
     "/room/{id}/can-book",
     responses={
         200: {"description": "Can book"},
+        400: {"description": "Start must be before end"},
         403: {"description": "Invalid user"},
         404: {"description": "Room not found"},
     },
@@ -84,6 +85,8 @@ async def room_can_book_route(
     """
     Check if the user can book a room for the given time range.
     """
+    if start >= end:
+        raise HTTPException(400, "Start must be before end")
     room = room_repository.get_by_id(id)
     if room is None:
         raise HTTPException(404, "Room not found")
@@ -100,12 +103,15 @@ async def room_can_book_route(
     "/room/{id}/bookings",
     responses={
         200: {"description": "Room bookings"},
+        400: {"description": "Start must be before end"},
         404: {"description": "Room not found"},
     },
 )
 async def room_bookings_route(
     id: str, user: VerifiedDep, start: datetime.datetime, end: datetime.datetime
 ) -> list[Booking]:
+    if start >= end:
+        raise HTTPException(400, "Start must be before end")
     obj = room_repository.get_by_id(id)
     if obj is None:
         raise HTTPException(404, "Room not found")
