@@ -497,6 +497,9 @@ class ExchangeBookingRepository:
 
         if booking is None:
             raise HTTPException(404, "Room attendee not found in booking attendees")
+        # Update cache immediately after successful booking creation
+        await self._cache_from_account_calendar.add_booking_to_cache(booking)
+        await self._cache_from_busy_info.add_booking_to_cache(booking)
         return booking
 
     async def get_booking(self, item_id: str) -> exchangelib.CalendarItem | None:
