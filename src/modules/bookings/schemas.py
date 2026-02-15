@@ -1,9 +1,7 @@
-import datetime
 from typing import Literal
 
-from pydantic import BaseModel, computed_field, model_validator
+from pydantic import BaseModel, computed_field
 
-from src.api.logging_ import logger
 from src.modules.bookings.tz_utils import MSKDatetime
 
 type BookingStatus = Literal["Accept", "Tentative", "Decline", "Unknown"]
@@ -64,17 +62,3 @@ class PatchBookingRequest(BaseModel):
     "New start time of the booking"
     end: MSKDatetime | None
     "New end time of the booking"
-
-
-class BookingStatusModel(BaseModel):
-    room_id: str
-    status: BookingStatus
-    last_response_time: datetime.datetime | None = None
-    conversation_history: list[str] | None = None
-
-    @model_validator(mode="after")
-    def validate_status(self) -> "BookingStatusModel":
-        if self.status not in ["Accept", "Tentative", "Decline", "Unknown"]:
-            logger.warning(f"Unknown status: {self.status}")
-            self.status = "Unknown"
-        return self
