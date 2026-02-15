@@ -14,12 +14,20 @@ def can_book(
     room: Room,
     start: datetime.datetime,
     end: datetime.datetime,
+    now: datetime.datetime | None = None,
 ) -> tuple[bool, str]:  # TODO: add check against conflicts in the Outlook.
     start = to_msk(start)
     end = to_msk(end)
+    current = to_msk(now) if now is not None else to_msk(datetime.datetime.now(datetime.UTC))
 
     if start >= end:
         return False, "Start must be before end."
+
+    if start < current or end < current:
+        return False, "Booking cannot be in the past."
+
+    if abs((start - current).total_seconds()) > 14 * 24 * 3600:
+        return False, "Booking cannot be more than two weeks in the future."
 
     in_access_list = room_repository.user_has_access_to_room(user.email, room.id)
     booking_longer_than_3_hours = end - start > datetime.timedelta(hours=3)
