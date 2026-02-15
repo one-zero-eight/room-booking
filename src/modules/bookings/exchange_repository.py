@@ -522,6 +522,8 @@ class ExchangeBookingRepository:
 
         email_index = get_emails_to_attendees_index(item)
         old_room_attendee = get_first_room_attendee_from_emails(email_index)
+        # Get old booking for cache removal (before updating)
+        old_booking = calendar_item_to_booking(item)
 
         update_fields = []
         if new_start is not None:
@@ -560,8 +562,13 @@ class ExchangeBookingRepository:
                 # Update cache immediately after successful booking update
                 # Remove old booking and add updated one
                 if updated_booking:
-                    await self._cache_from_account_calendar.remove_booking_from_cache(item_id)
-                    await self._cache_from_busy_info.remove_booking_from_cache(item_id)
+                    # For account calendar, use outlook_booking_id
+                    await self._cache_from_account_calendar.remove_booking_from_cache(outlook_booking_id=item_id)
+                    # For free busy info, use old booking's (room_id, start, end) since they don't have outlook_booking_id
+                    if old_booking:
+                        await self._cache_from_busy_info.remove_booking_from_cache(
+                            room_id=old_booking.room_id, booking=old_booking
+                        )
                     await self._cache_from_account_calendar.add_booking_to_cache(updated_booking)
                     await self._cache_from_busy_info.add_booking_to_cache(updated_booking)
                 return updated_booking
@@ -569,6 +576,8 @@ class ExchangeBookingRepository:
 
     async def cancel_booking(self, item: exchangelib.CalendarItem, email: str | None) -> bool:
         item_id = str(item.id)
+        # Convert item to booking to get room_id, start, end for cache invalidation
+        booking = calendar_item_to_booking(item)
 
         async with self._recently_canceled_lock:
             now = time.monotonic()
@@ -585,8 +594,13 @@ class ExchangeBookingRepository:
             async with self._recently_canceled_lock:
                 self._recently_canceled[item_id] = time.monotonic()
             # Remove booking from cache immediately after successful cancellation
-            await self._cache_from_account_calendar.remove_booking_from_cache(item_id)
-            await self._cache_from_busy_info.remove_booking_from_cache(item_id)
+            # For account calendar, use outlook_booking_id
+            await self._cache_from_account_calendar.remove_booking_from_cache(outlook_booking_id=item_id)
+            # For free busy info, use (room_id, start, end) since they don't have outlook_booking_id
+            if booking:
+                await self._cache_from_busy_info.remove_booking_from_cache(
+                    room_id=booking.room_id, booking=booking
+                )
             return True
 
         return await self._cancel_single_flight.run(item_id, lambda: asyncio.create_task(cancel_task()))

@@ -177,16 +177,35 @@ class CacheForBookings:
                         # Keep bookings sorted by start time
                         slot.bookings.sort(key=lambda b: b.start)
 
-    async def remove_booking_from_cache(self, outlook_booking_id: str) -> None:
+    async def remove_booking_from_cache(
+        self, outlook_booking_id: str | None = None, room_id: str | None = None, booking: "Booking | None" = None
+    ) -> None:
         """
         Remove a booking from all cache slots across all rooms.
         This allows immediate cache updates after booking cancellation.
-        Since outlook_booking_id is unique, we search across all rooms.
+        
+        Bookings can be identified in two ways:
+        - By outlook_booking_id (for bookings from account calendar view)
+        - By (room_id, start, end) tuple (for bookings from free busy info that don't have outlook_booking_id)
         
         Args:
-            outlook_booking_id: The Outlook booking ID to remove
+            outlook_booking_id: The Outlook booking ID to remove (if available)
+            room_id: The room ID (used with booking parameter for time-based matching)
+            booking: The booking object to remove (matched by room_id, start, end)
         """
         async with self._lock:
-            for room_id, slots in self.cache.items():
-                for slot in slots:
-                    slot.bookings = [b for b in slot.bookings if b.outlook_booking_id != outlook_booking_id]
+            if outlook_booking_id is not None:
+                # Match by outlook_booking_id (for account calendar bookings)
+                for slots in self.cache.values():
+                    for slot in slots:
+                        slot.bookings = [b for b in slot.bookings if b.outlook_booking_id != outlook_booking_id]
+            elif booking is not None and room_id is not None:
+                # Match by (room_id, start, end) for free busy info bookings
+                slots = self.cache.get(room_id)
+                if slots:
+                    for slot in slots:
+                        slot.bookings = [
+                            b
+                            for b in slot.bookings
+                            if not (b.room_id == room_id and b.start == booking.start and b.end == booking.end)
+                        ]

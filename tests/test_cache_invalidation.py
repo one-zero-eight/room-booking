@@ -135,7 +135,7 @@ async def test_remove_booking_from_cache():
     now = 1000.0
 
     await cache.update_cache("r1", [b1, b2], start, end, now=now)
-    await cache.remove_booking_from_cache("oid-1")
+    await cache.remove_booking_from_cache(outlook_booking_id="oid-1")
 
     entry = await cache.get_cached_entry("r1", start, end, now=now)
     assert entry is not None
@@ -159,7 +159,7 @@ async def test_remove_booking_from_cache_removes_from_all_slots():
     await cache.update_cache("r1", [b1], slot2_start, slot2_end, now=now)
 
     # Remove booking from cache
-    await cache.remove_booking_from_cache("oid-1")
+    await cache.remove_booking_from_cache(outlook_booking_id="oid-1")
 
     # Verify booking is removed from both slots
     entry1 = await cache.get_cached_entry("r1", slot1_start, slot1_end, now=now)
@@ -176,7 +176,7 @@ async def test_remove_booking_from_cache_no_cache_for_room():
     now = 1000.0
 
     # Try to remove booking when no cache exists for room
-    await cache.remove_booking_from_cache("oid-1")
+    await cache.remove_booking_from_cache(outlook_booking_id="oid-1")
 
     # Should not raise error
     start = datetime.datetime(2025, 2, 14, 9, 0, tzinfo=datetime.UTC)
@@ -196,7 +196,7 @@ async def test_remove_nonexistent_booking():
 
     await cache.update_cache("r1", [b1], start, end, now=now)
     # Try to remove non-existent booking
-    await cache.remove_booking_from_cache("oid-nonexistent")
+    await cache.remove_booking_from_cache(outlook_booking_id="oid-nonexistent")
 
     entry = await cache.get_cached_entry("r1", start, end, now=now)
     assert entry is not None
@@ -222,7 +222,7 @@ async def test_remove_booking_from_cache_searches_all_rooms():
     await cache.update_cache("r3", [b3], start, end, now=now)
 
     # Remove booking from r2 without specifying room_id
-    await cache.remove_booking_from_cache("oid-2")
+    await cache.remove_booking_from_cache(outlook_booking_id="oid-2")
 
     # Verify r1 and r3 still have their bookings
     entry1 = await cache.get_cached_entry("r1", start, end, now=now)
@@ -238,3 +238,28 @@ async def test_remove_booking_from_cache_searches_all_rooms():
     entry2 = await cache.get_cached_entry("r2", start, end, now=now)
     assert entry2 is not None
     assert len(entry2.bookings) == 0
+
+
+@pytest.mark.anyio
+async def test_remove_booking_by_time_range():
+    """Test removing bookings by (room_id, start, end) for free busy info bookings without outlook_booking_id"""
+    cache = CacheForBookings(ttl=3600)
+    # Create bookings without outlook_booking_id (like free busy info)
+    b1 = _booking(room_id="r1", outlook_booking_id=None, start_offset=0, end_offset=3600)
+    b2 = _booking(room_id="r1", outlook_booking_id=None, start_offset=3600, end_offset=7200)
+
+    start = datetime.datetime(2025, 2, 14, 9, 0, tzinfo=datetime.UTC)
+    end = datetime.datetime(2025, 2, 14, 14, 0, tzinfo=datetime.UTC)
+    now = 1000.0
+
+    await cache.update_cache("r1", [b1, b2], start, end, now=now)
+    
+    # Remove first booking by time range
+    await cache.remove_booking_from_cache(room_id="r1", booking=b1)
+
+    entry = await cache.get_cached_entry("r1", start, end, now=now)
+    assert entry is not None
+    assert len(entry.bookings) == 1
+    # Verify the second booking remains
+    assert entry.bookings[0].start == b2.start
+    assert entry.bookings[0].end == b2.end
