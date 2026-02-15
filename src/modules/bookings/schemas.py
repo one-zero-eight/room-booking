@@ -4,6 +4,7 @@ from typing import Literal
 from pydantic import BaseModel, computed_field, model_validator
 
 from src.api.logging_ import logger
+from src.modules.bookings.tz_utils import MSKDatetime
 
 type BookingStatus = Literal["Accept", "Tentative", "Decline", "Unknown"]
 
@@ -20,9 +21,9 @@ class Attendee(BaseModel):
 class Booking(BaseModel):
     room_id: str
     "ID of the room"
-    start: datetime.datetime
+    start: MSKDatetime
     "Start time of booking"
-    end: datetime.datetime
+    end: MSKDatetime
     "End time of booking"
     title: str
     "Title of the booking"
@@ -48,9 +49,9 @@ class CreateBookingRequest(BaseModel):
     "ID of the room to book"
     title: str
     "Title of the booking"
-    start: datetime.datetime
+    start: MSKDatetime
     "Start time of the booking"
-    end: datetime.datetime
+    end: MSKDatetime
     "End time of the booking"
     participant_emails: list[str] | None
     "List of participant emails to invite to the booking"
@@ -59,9 +60,9 @@ class CreateBookingRequest(BaseModel):
 class PatchBookingRequest(BaseModel):
     title: str | None
     "New title of the booking"
-    start: datetime.datetime | None
+    start: MSKDatetime | None
     "New start time of the booking"
-    end: datetime.datetime | None
+    end: MSKDatetime | None
     "New end time of the booking"
 
 

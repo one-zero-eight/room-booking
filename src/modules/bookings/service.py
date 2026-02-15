@@ -3,20 +3,12 @@ from collections.abc import Iterable
 from typing import cast, overload
 
 import exchangelib
-import pytz
 from exchangelib import CalendarItem
 
 from src.config_schema import Room
 from src.modules.bookings.schemas import Attendee, Booking, BookingStatus
+from src.modules.bookings.tz_utils import to_msk
 from src.modules.rooms.repository import room_repository
-
-_msk_timezone = pytz.timezone("Europe/Moscow")
-
-
-def to_msk(dt: datetime.datetime) -> datetime.datetime:
-    if isinstance(dt, exchangelib.EWSDateTime):
-        return dt.astimezone(exchangelib.EWSTimeZone.from_pytz(_msk_timezone))
-    return dt.astimezone(_msk_timezone)
 
 
 def get_emails_to_attendees_index(calendar_item: CalendarItem) -> dict[str, exchangelib.Attendee]:

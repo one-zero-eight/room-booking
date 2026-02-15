@@ -23,9 +23,9 @@ from src.modules.bookings.service import (
     get_emails_to_attendees_index,
     get_first_room_attendee_from_emails,
     get_first_room_from_emails,
-    to_msk,
 )
 from src.modules.bookings.single_flight import SingleFlight
+from src.modules.bookings.tz_utils import to_msk
 from src.modules.inh_accounts_sdk import UserSchema
 from src.modules.rooms.repository import room_repository
 
@@ -193,8 +193,8 @@ class ExchangeBookingRepository:
                     Booking(
                         room_id=room_id,
                         title=title,
-                        start=calendar_event.start,
-                        end=calendar_event.end,
+                        start=to_msk(cast(datetime.datetime, calendar_event.start)),
+                        end=to_msk(cast(datetime.datetime, calendar_event.end)),
                         outlook_booking_id=None,
                         attendees=[Attendee(email=email_in_location, status=None, assosiated_room_id=None)]
                         if email_in_location is not None

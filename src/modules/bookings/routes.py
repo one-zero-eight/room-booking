@@ -25,6 +25,7 @@ from src.modules.bookings.service import (
     get_first_room_from_emails,
     set_related_to_me,
 )
+from src.modules.bookings.tz_utils import msk_timezone
 from src.modules.inh_accounts_sdk import inh_accounts
 from src.modules.rooms.repository import room_repository
 from src.modules.rules.service import can_book
@@ -34,7 +35,8 @@ def _default_date_range(
     start: datetime.datetime | None,
     end: datetime.datetime | None,
 ) -> tuple[datetime.datetime, datetime.datetime]:
-    today = datetime.datetime.combine(datetime.date.today(), datetime.time.min)
+    now_msk = datetime.datetime.now(msk_timezone)
+    today = now_msk.replace(hour=0, minute=0, second=0, microsecond=0)
     if start is None:
         start = today - datetime.timedelta(days=7)
     if end is None:
