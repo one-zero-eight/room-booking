@@ -85,8 +85,6 @@ async def room_can_book_route(
     """
     Check if the user can book a room for the given time range.
     """
-    if start >= end:
-        raise HTTPException(400, "Start must be before end")
     room = room_repository.get_by_id(id)
     if room is None:
         raise HTTPException(404, "Room not found")
