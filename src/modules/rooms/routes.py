@@ -80,7 +80,7 @@ async def room_route(id: str, _: VerifiedDep) -> Room:
     },
 )
 async def room_can_book_route(
-    id: str, user: VerifiedDep, start: datetime.datetime, end: datetime.datetime
+    id: str, user: VerifiedDep, start: datetime.datetime, end: datetime.datetime, is_update: bool = False
 ) -> CanBookResponse:
     """
     Check if the user can book a room for the given time range.
@@ -95,7 +95,7 @@ async def room_can_book_route(
     if innohassle_user is None:
         raise HTTPException(403, "Invalid user")
 
-    can, reason = can_book(user=innohassle_user.innopolis_info, room=room, start=start, end=end)
+    can, reason = can_book(user=innohassle_user.innopolis_info, room=room, start=start, end=end, is_update=is_update)
     return CanBookResponse(can_book=can, reason_why_cannot=reason)
 
 

@@ -15,6 +15,7 @@ def can_book(
     start: datetime.datetime,
     end: datetime.datetime,
     now: datetime.datetime | None = None,
+    is_update: bool = False,
 ) -> tuple[bool, str]:  # TODO: add check against conflicts in the Outlook.
     start = to_msk(start)
     end = to_msk(end)
@@ -23,7 +24,7 @@ def can_book(
     if start >= end:
         return False, "Start must be before end."
 
-    if start < current or end < current:
+    if (start < current and not is_update) or end < current:  # Allow to change currently-running booking
         return False, "Booking cannot be in the past."
 
     if abs((start - current).total_seconds()) > 14 * 24 * 3600:

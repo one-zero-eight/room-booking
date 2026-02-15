@@ -251,6 +251,7 @@ async def update_booking(
         room=room,
         start=cast(datetime.datetime, request.start or booking.start),
         end=cast(datetime.datetime, request.end or booking.end),
+        is_update=True,
     )
     if not can:
         raise HTTPException(403, why)
