@@ -152,16 +152,14 @@ class CacheForBookings:
                     room_x_cache[room_id] = entry.bookings
         return room_x_cache, cache_misses
 
-    async def add_booking_to_cache(self, booking: Booking, now: float | None = None) -> None:
+    async def add_booking_to_cache(self, booking: Booking) -> None:
         """
         Add a booking to all cache slots that overlap with the booking's time range.
         This allows immediate cache updates after booking creation.
         
         Args:
             booking: The booking to add to cache
-            now: Optional timestamp for consistency with other cache methods (not currently used for TTL checks)
         """
-        now = now if now is not None else time.monotonic()
         async with self._lock:
             slots = self.cache.get(booking.room_id)
             if not slots:
@@ -172,15 +170,12 @@ class CacheForBookings:
                 # Two time ranges overlap if: slot.start < booking.end AND booking.start < slot.end
                 if slot.start < booking.end and booking.start < slot.end:
                     # Check if booking is not already in the slot
-                    # For bookings with outlook_booking_id, match by ID
-                    # For bookings without outlook_booking_id (free busy info), match by (room_id, start, end)
-                    if booking.outlook_booking_id is not None:
-                        is_duplicate = any(b.outlook_booking_id == booking.outlook_booking_id for b in slot.bookings)
-                    else:
-                        is_duplicate = any(
-                            b.room_id == booking.room_id and b.start == booking.start and b.end == booking.end
-                            for b in slot.bookings
-                        )
+                    # Match by both outlook_booking_id (if available) and (room_id, start, end)
+                    is_duplicate = any(
+                        (b.outlook_booking_id is not None and b.outlook_booking_id == booking.outlook_booking_id)
+                        or (b.room_id == booking.room_id and b.start == booking.start and b.end == booking.end)
+                        for b in slot.bookings
+                    )
 
                     if not is_duplicate:
                         slot.bookings.append(booking.model_copy())
@@ -192,27 +187,25 @@ class CacheForBookings:
         Remove a booking from all cache slots across all rooms.
         This allows immediate cache updates after booking cancellation.
         
-        Bookings can be identified in two ways:
-        - By outlook_booking_id (for bookings from account calendar view)
-        - By (room_id, start, end) tuple (for bookings from free busy info that don't have outlook_booking_id)
+        Matches bookings by both outlook_booking_id (if available) and (room_id, start, end) tuple
+        to ensure the booking is removed regardless of which matching strategy works.
         
         Args:
-            booking: The booking object to remove. Will use outlook_booking_id if available,
-                    otherwise match by (room_id, start, end)
+            booking: The booking object to remove
         """
         async with self._lock:
-            if booking.outlook_booking_id is not None:
-                # Match by outlook_booking_id (for account calendar bookings)
-                for slots in self.cache.values():
-                    for slot in slots:
-                        slot.bookings = [b for b in slot.bookings if b.outlook_booking_id != booking.outlook_booking_id]
-            else:
-                # Match by (room_id, start, end) for free busy info bookings
-                slots = self.cache.get(booking.room_id)
-                if slots:
-                    for slot in slots:
-                        slot.bookings = [
-                            b
-                            for b in slot.bookings
-                            if not (b.room_id == booking.room_id and b.start == booking.start and b.end == booking.end)
-                        ]
+            # Search all rooms and slots for the booking
+            for slots in self.cache.values():
+                for slot in slots:
+                    slot.bookings = [
+                        b
+                        for b in slot.bookings
+                        if not (
+                            # Match by outlook_booking_id if both have it
+                            (b.outlook_booking_id is not None 
+                             and booking.outlook_booking_id is not None 
+                             and b.outlook_booking_id == booking.outlook_booking_id)
+                            # OR match by (room_id, start, end)
+                            or (b.room_id == booking.room_id and b.start == booking.start and b.end == booking.end)
+                        )
+                    ]

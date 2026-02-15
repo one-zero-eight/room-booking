@@ -38,7 +38,7 @@ async def test_add_booking_to_cache_adds_to_overlapping_slots():
     await cache.update_cache("r1", [b1], start, end, now=now)
 
     # Add new booking to cache
-    await cache.add_booking_to_cache(new_booking, now=now)
+    await cache.add_booking_to_cache(new_booking)
 
     # Verify both bookings are in cache
     entry = await cache.get_cached_entry("r1", start, end, now=now)
@@ -59,7 +59,7 @@ async def test_add_booking_to_cache_sorts_by_start_time():
     now = 1000.0
 
     await cache.update_cache("r1", [b1], start, end, now=now)
-    await cache.add_booking_to_cache(new_booking, now=now)
+    await cache.add_booking_to_cache(new_booking)
 
     entry = await cache.get_cached_entry("r1", start, end, now=now)
     assert entry is not None
@@ -80,7 +80,7 @@ async def test_add_booking_to_cache_no_duplicate():
 
     await cache.update_cache("r1", [b1], start, end, now=now)
     # Try to add same booking again
-    await cache.add_booking_to_cache(b1, now=now)
+    await cache.add_booking_to_cache(b1)
 
     entry = await cache.get_cached_entry("r1", start, end, now=now)
     assert entry is not None
@@ -99,7 +99,7 @@ async def test_add_booking_to_cache_no_overlap():
     now = 1000.0
 
     await cache.update_cache("r1", [b1], start, end, now=now)
-    await cache.add_booking_to_cache(new_booking, now=now)
+    await cache.add_booking_to_cache(new_booking)
 
     entry = await cache.get_cached_entry("r1", start, end, now=now)
     assert entry is not None
@@ -115,7 +115,7 @@ async def test_add_booking_to_cache_no_cache_for_room():
     now = 1000.0
 
     # Try to add booking when no cache exists for room
-    await cache.add_booking_to_cache(new_booking, now=now)
+    await cache.add_booking_to_cache(new_booking)
 
     # Should not create cache entry
     start = datetime.datetime(2025, 2, 14, 9, 0, tzinfo=datetime.UTC)
@@ -138,7 +138,7 @@ async def test_add_booking_to_cache_no_duplicate_without_outlook_id():
 
     await cache.update_cache("r1", [b1], start, end, now=now)
     # Try to add the same booking again (same room_id, start, end)
-    await cache.add_booking_to_cache(b2, now=now)
+    await cache.add_booking_to_cache(b2)
 
     entry = await cache.get_cached_entry("r1", start, end, now=now)
     assert entry is not None
@@ -212,7 +212,8 @@ async def test_remove_booking_from_cache_no_cache_for_room():
 async def test_remove_nonexistent_booking():
     cache = CacheForBookings(ttl=3600)
     b1 = _booking(room_id="r1", outlook_booking_id="oid-1")
-    b_nonexistent = _booking(room_id="r1", outlook_booking_id="oid-nonexistent")
+    # Make b_nonexistent have different time so it's truly non-existent
+    b_nonexistent = _booking(room_id="r1", outlook_booking_id="oid-nonexistent", start_offset=7200, end_offset=10800)
 
     start = datetime.datetime(2025, 2, 14, 9, 0, tzinfo=datetime.UTC)
     end = datetime.datetime(2025, 2, 14, 12, 0, tzinfo=datetime.UTC)
