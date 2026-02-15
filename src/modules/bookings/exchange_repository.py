@@ -452,6 +452,8 @@ class ExchangeBookingRepository:
             fetched = await self.get_booking(item_id=item_id)
 
             if fetched is None:
+                if await self.is_recently_canceled(item_id):
+                    raise HTTPException(403, "Booking was declined by the room")
                 raise HTTPException(404, "Booking was removed during booking")
 
             booking = calendar_item_to_booking(fetched, room_id=room.id)
