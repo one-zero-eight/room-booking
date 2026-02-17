@@ -1,6 +1,7 @@
 import datetime
 
 import exchangelib
+import exchangelib.folders.base
 import pycurl
 import requests
 from requests_curl import CURLAdapter
@@ -99,3 +100,19 @@ def get_free_busy_info(self, accounts, start, end, merged_free_busy_interval=30,
 
 exchangelib.protocol.BaseProtocol.raw_session = raw_session
 exchangelib.protocol.Protocol.get_free_busy_info = get_free_busy_info
+
+# Optimize request to get calendar items
+original_normalize_fields = exchangelib.folders.base.BaseFolder.normalize_fields
+
+
+def normalize_fields(self, fields):
+    additional_fields = original_normalize_fields(self, fields)
+    result = []
+    for field in additional_fields:
+        if field.field.field_uri == "calendar:StartTimeZone" or field.field.field_uri == "calendar:EndTimeZone":
+            continue
+        result.append(field)
+    return result
+
+
+exchangelib.folders.base.BaseFolder.normalize_fields = normalize_fields
