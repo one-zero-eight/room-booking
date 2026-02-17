@@ -147,11 +147,13 @@ class ExchangeBookingRepository:
 
         async def free_busy_task(args: AccountGetFreeBusyInfoArgs) -> dict[str, list[CalendarEvent]]:
             account_free_busy_info = await asyncio.to_thread(
-                lambda: self.account.protocol.get_free_busy_info(
-                    accounts=args["accounts"],
-                    start=exchangelib.EWSDateTime.from_datetime(args["start"]),
-                    end=exchangelib.EWSDateTime.from_datetime(args["end"]),
-                    requested_view="Detailed",
+                lambda: list(
+                    self.account.protocol.get_free_busy_info(
+                        accounts=args["accounts"],
+                        start=exchangelib.EWSDateTime.from_datetime(args["start"]),
+                        end=exchangelib.EWSDateTime.from_datetime(args["end"]),
+                        requested_view="Detailed",
+                    )
                 ),
             )
             account_free_busy_info = cast(Iterable[FreeBusyView], account_free_busy_info)
