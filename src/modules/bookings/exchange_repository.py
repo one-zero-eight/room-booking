@@ -17,6 +17,7 @@ from src.api.logging_ import logger
 from src.config import settings
 from src.config_schema import Room
 from src.modules.bookings.caching import CacheForBookings
+from src.modules.bookings.recently import RecentBookings
 from src.modules.bookings.schemas import Attendee, Booking
 from src.modules.bookings.service import (
     calendar_item_to_booking,
@@ -52,8 +53,7 @@ class ExchangeBookingRepository:
     subscription_id: str | None
     watermark: str | None
     last_callback_time: float | None
-    _recently_canceled: dict[str, float]  # id -> timestamp
-    _recently_canceled_lock: asyncio.Lock
+    _recently: RecentBookings
 
     def __init__(self, ews_endpoint: str, account_email: str):
         self.ews_endpoint = ews_endpoint
@@ -75,8 +75,7 @@ class ExchangeBookingRepository:
         self.subscription_id = None
         self.watermark = None
         self.last_callback_time = None
-        self._recently_canceled = {}
-        self._recently_canceled_lock = asyncio.Lock()
+        self._recently = RecentBookings(settings.recently_canceled_booking_ttl_sec)
 
         self._cache_from_busy_info = CacheForBookings(settings.ttl_bookings_from_busy_info)
         self._cache_from_account_calendar = CacheForBookings(settings.ttl_bookings_from_account_calendar)
@@ -302,7 +301,7 @@ class ExchangeBookingRepository:
             rooms=room_repository.get_all(include_red=False),
             start=start,
             end=end,
-            use_cache=False,
+            use_cache=False,  # we dont use cache, so there is no need to check recently created and updated bookings
             use_dedup=True,
         )
 
@@ -327,7 +326,7 @@ class ExchangeBookingRepository:
                     continue
 
                 user_bookings.append(booking)
-
+        user_bookings.sort(key=lambda x: x.start)
         return user_bookings
 
     async def _fetch_bookings_both_from_account_calendar_and_busy_info(
@@ -338,6 +337,7 @@ class ExchangeBookingRepository:
         if not rooms:
             return []
 
+        t_start = time.monotonic()
         bookings_from_account_calendar, bookings_from_busy_info = await asyncio.gather(
             self._fetch_bookings_from_account_calendar(
                 rooms=rooms,
@@ -362,11 +362,11 @@ class ExchangeBookingRepository:
             return booking.room_id, booking.start, booking.end
 
         for _room_id, bookings in bookings_from_account_calendar.items():
-            for booking in bookings:
-                account_calendar_registry[key(booking)].append(booking)
+            for updated in bookings:
+                account_calendar_registry[key(updated)].append(updated)
         for _room_id, bookings in bookings_from_busy_info.items():
-            for booking in bookings:
-                busy_info_registry[key(booking)].append(booking)
+            for updated in bookings:
+                busy_info_registry[key(updated)].append(updated)
 
         bookings = []
 
@@ -388,9 +388,59 @@ class ExchangeBookingRepository:
             else:
                 bookings.extend(bi_bookings)
 
-        bookings.sort(key=lambda x: x.start)
+        # ---- Use cache for recently created, updated and canceled bookings ----
+        recently_created_bookings = await self._recently.get_created()
+        recently_canceled_bookings = await self._recently.get_canceled()
+        recently_updated_bookings = await self._recently.get_updated_with_ts()
 
-        return bookings
+        for canceled_booking_id in recently_canceled_bookings:
+            recently_created_bookings.pop(canceled_booking_id, None)
+            recently_updated_bookings.pop(canceled_booking_id, None)
+
+        for recently_updated_booking_id in recently_updated_bookings:
+            # we will prioritize recently updated bookings over recently created bookings
+            recently_created_bookings.pop(recently_updated_booking_id, None)
+
+        bookings_with_recently = []
+        for b in bookings:
+            oid = b.outlook_booking_id
+            if oid is not None:
+                if oid in recently_canceled_bookings:
+                    # we will not add recently canceled bookings to the list
+                    logger.info("Booking %s skipped: recently canceled", oid)
+
+                elif oid in recently_updated_bookings:
+                    # add updated booking to the list and remove it from the recently updated bookings, prioritizing updated bookings
+                    updated_ts, updated = recently_updated_bookings.pop(oid)
+                    if (t_start - settings.ttl_bookings_from_account_calendar) < updated_ts:
+                        bookings_with_recently.append(updated)
+                        logger.info("Booking %s: using recently updated version", oid)
+                    else:
+                        bookings_with_recently.append(b)
+                        logger.info("Booking %s: using fetched version", oid)
+
+                elif oid in recently_created_bookings:
+                    # add booking to the list and remove it from the recently created bookings, prioritizing fetched bookings
+                    bookings_with_recently.append(b)
+                    recently_created_bookings.pop(oid)
+                    logger.info("Booking %s: in fetch and recently created, using fetched", oid)
+
+                else:
+                    # just booking from somewhere else, add the booking to the list
+                    bookings_with_recently.append(b)
+            else:
+                bookings_with_recently.append(b)
+
+        for created_booking in recently_created_bookings.values():
+            # add remaining recently created bookings to the list, that were not updated or canceled
+            bookings_with_recently.append(created_booking)
+            logger.info("Booking %s: remaining recently created (not in fetch), appended", created_booking)
+
+        # ^^^^^
+
+        bookings_with_recently.sort(key=lambda x: x.start)
+
+        return bookings_with_recently
 
     async def get_bookings_for_room(
         self,
@@ -488,12 +538,14 @@ class ExchangeBookingRepository:
             if room_attendee.last_response_time is not None:
                 if booking is None:
                     raise HTTPException(404, "Room attendee not found in booking attendees")
+                await self._recently.mark_created(item_id, booking)
                 return booking
 
             await asyncio.sleep(1)
 
         if booking is None:
             raise HTTPException(404, "Room attendee not found in booking attendees")
+        await self._recently.mark_created(item_id, booking)
         return booking
 
     async def get_booking(self, item_id: str) -> exchangelib.CalendarItem | None:
@@ -550,38 +602,30 @@ class ExchangeBookingRepository:
             new_room_attendee = get_first_room_attendee_from_emails(new_email_index)
 
             if new_room_attendee.last_response_time != old_room_attendee.last_response_time:
-                return calendar_item_to_booking(new_item)
+                booking = calendar_item_to_booking(new_item)
+                if booking is not None:
+                    await self._recently.mark_updated(item_id, booking)
+                return booking
+
         return None
 
     async def cancel_booking(self, item: exchangelib.CalendarItem, email: str | None) -> bool:
         item_id = str(item.id)
-        async with self._recently_canceled_lock:
-            now = time.monotonic()
-            self._recently_canceled = {
-                k: v for k, v in self._recently_canceled.items() if now - v < settings.recently_canceled_booking_ttl_sec
-            }
-            if item_id in self._recently_canceled:
-                return True
+
+        if await self._recently.is_canceled(item_id):
+            return True
 
         async def cancel_task() -> bool:
             await asyncio.to_thread(
                 item.cancel, new_body=f"Canceled by {email}\nProvider: https://innohassle.ru/room-booking"
             )
-            async with self._recently_canceled_lock:
-                self._recently_canceled[item_id] = time.monotonic()
+            await self._recently.mark_canceled(item_id)
             return True
 
         return await self._cancel_single_flight.run(item_id, lambda: asyncio.create_task(cancel_task()))
 
     async def is_recently_canceled(self, item_id: str) -> bool:
-        async with self._recently_canceled_lock:
-            now = time.monotonic()
-            canceled_at = self._recently_canceled.get(item_id)
-            if canceled_at is None:
-                return False
-            if (now - canceled_at) < settings.recently_canceled_booking_ttl_sec:
-                return True
-            return False
+        return await self._recently.is_canceled(item_id)
 
 
 exchange_booking_repository = ExchangeBookingRepository(
