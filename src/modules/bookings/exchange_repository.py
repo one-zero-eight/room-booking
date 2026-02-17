@@ -326,7 +326,7 @@ class ExchangeBookingRepository:
                     continue
 
                 user_bookings.append(booking)
-        user_bookings.sort(key=lambda x: x.start)
+        user_bookings.sort(key=lambda x: x.start, reverse=True)
         return user_bookings
 
     async def _fetch_bookings_both_from_account_calendar_and_busy_info(
@@ -438,7 +438,7 @@ class ExchangeBookingRepository:
 
         # ^^^^^
 
-        bookings_with_recently.sort(key=lambda x: x.start)
+        bookings_with_recently.sort(key=lambda x: x.start, reverse=True)
 
         return bookings_with_recently
 
