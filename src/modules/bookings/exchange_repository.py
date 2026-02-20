@@ -574,11 +574,11 @@ class ExchangeBookingRepository:
         update_fields = []
         if new_start is not None:
             new_start = to_msk(new_start)
-            item.start = new_start
+            item.start = exchangelib.EWSDateTime.from_datetime(new_start)
             update_fields.append("start")
         if new_end is not None:
             new_end = to_msk(new_end)
-            item.end = new_end
+            item.end = exchangelib.EWSDateTime.from_datetime(new_end)
             update_fields.append("end")
         if new_title is not None:
             item.subject = new_title
