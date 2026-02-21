@@ -55,15 +55,19 @@ class ExchangeBookingRepository:
     last_callback_time: float | None
     _recently: RecentBookings
 
-    def __init__(self, ews_endpoint: str, account_email: str):
+    def __init__(self, ews_endpoint: str, account_email: str, password: str):
         self.ews_endpoint = ews_endpoint
         self.account_email = account_email
 
         config = exchangelib.Configuration(
-            auth_type=exchangelib.transport.NOAUTH,
+            auth_type=exchangelib.transport.BASIC,
             service_endpoint=self.ews_endpoint,
             version=exchangelib.Version(exchangelib.version.EXCHANGE_2016),
             max_connections=5,
+            credentials=exchangelib.Credentials(
+                username=account_email,
+                password=password,
+            ),
         )
         self.account = exchangelib.Account(
             self.account_email,
@@ -633,4 +637,5 @@ class ExchangeBookingRepository:
 exchange_booking_repository = ExchangeBookingRepository(
     ews_endpoint=settings.exchange.ews_endpoint,
     account_email=settings.exchange.username,
+    password=settings.exchange.password.get_secret_value(),
 )
