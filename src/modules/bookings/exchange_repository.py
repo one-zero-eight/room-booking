@@ -439,8 +439,9 @@ class ExchangeBookingRepository:
 
         for created_booking in recently_created_bookings.values():
             # add remaining recently created bookings to the list, that were not updated or canceled
-            bookings_with_recently.append(created_booking)
-            logger.info("Booking %s: remaining recently created (not in fetch), appended", created_booking)
+            if created_booking.room_id in room_ids:
+                bookings_with_recently.append(created_booking)
+                logger.info("Booking %s: remaining recently created (not in fetch), appended", created_booking)
 
         # ^^^^^
 
