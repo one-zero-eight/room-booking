@@ -304,7 +304,7 @@ class ExchangeBookingRepository:
         Fetch bookings from account calendar for all rooms for the given time range and filter out bookings that are not related to the user.
         """
         bookings_from_account_calendar = await self._fetch_bookings_from_account_calendar(
-            rooms=room_repository.get_all(include_red=False),
+            rooms=room_repository.get_all(include_red=True),
             start=start,
             end=end,
             use_cache=False,  # we dont use cache, so there is no need to check recently created and updated bookings
