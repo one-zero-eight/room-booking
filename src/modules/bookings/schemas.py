@@ -26,7 +26,9 @@ class Booking(BaseModel):
     title: str
     "Title of the booking"
     outlook_booking_id: str | None
-    "ID of outlook booking"
+    "ID of outlook booking in service account calendar. Only set if we can manage the booking."
+    outlook_entry_id: str | None
+    "Hex Entry Id returned by Outlook's free busy info. Only set if we cannot manage the booking."
     attendees: list[Attendee] | None
     "List of attendees of the booking"
     related_to_me: bool | None = None

@@ -8,7 +8,7 @@ from typing import TypedDict, cast
 
 import exchangelib
 import exchangelib.errors
-from exchangelib.properties import CalendarEvent
+from exchangelib.properties import EWS_ID, HEX_ENTRY_ID, AlternateId, CalendarEvent
 from exchangelib.services.get_user_availability import FreeBusyView
 from fastapi import HTTPException
 
@@ -187,6 +187,7 @@ class ExchangeBookingRepository:
                 title = "Busy"
                 email_in_location = None
                 attendee = []
+                outlook_entry_id = None
 
                 if room is not None:
                     attendee.append(Attendee(email=room.resource_email, status=None, assosiated_room_id=room.id))
@@ -200,6 +201,8 @@ class ExchangeBookingRepository:
                         if match is not None:
                             email_in_location = match.group(1)
                             attendee.append(Attendee(email=email_in_location, status=None, assosiated_room_id=None))
+                    if calendar_event.details.id is not None:
+                        outlook_entry_id = str(calendar_event.details.id)
 
                 room_id_x_bookings[room_id].append(
                     Booking(
@@ -208,8 +211,9 @@ class ExchangeBookingRepository:
                         start=to_msk(cast(datetime.datetime, calendar_event.start)),
                         end=to_msk(cast(datetime.datetime, calendar_event.end)),
                         outlook_booking_id=None,
+                        outlook_entry_id=outlook_entry_id,
                         attendees=attendee or None,
-                        # busy info doesn't contain attendees info, we can fetch it from account calendar if needed. Although, we know that room is always in the attendees list, and we can parse organizer email from location.
+                        # busy info doesn't contain attendees info, we can fetch it from account calendar using outlook_entry_id. Although, we know that room is always in the attendees list, and we can parse organizer email from location.
                     )
                 )
         # ^^^^^
@@ -561,6 +565,31 @@ class ExchangeBookingRepository:
             return item
         except exchangelib.errors.ErrorItemNotFound:
             return None
+
+    async def get_booking_by_entry_id(self, outlook_entry_id: str, room: Room) -> Booking | None:
+        try:
+            booking = await asyncio.to_thread(
+                self._get_booking_by_entry_id, outlook_entry_id=outlook_entry_id, room=room
+            )
+            return booking
+        except exchangelib.errors.ErrorItemNotFound:
+            return None
+
+    def _get_booking_by_entry_id(self, outlook_entry_id: str, room: Room) -> Booking | None:
+        item_id = list(
+            self.account.protocol.convert_ids(
+                [AlternateId(id=outlook_entry_id, format=HEX_ENTRY_ID, mailbox=room.resource_email)],
+                destination_format=EWS_ID,
+            )
+        )[0]
+        calendar_item: exchangelib.CalendarItem = self.account.root.get(id=item_id.id)
+        from_my_calendar = calendar_item.parent_folder_id.id == self.account.calendar.id
+        return calendar_item_to_booking(
+            calendar_item,
+            room_id=room.id,
+            was_fetched_from_room_calendar=not from_my_calendar,
+            room_calendar_entry_id=outlook_entry_id,
+        )
 
     async def update_booking(
         self,

@@ -40,7 +40,8 @@ def get_first_room_attendee_from_emails(email_index: dict[str, exchangelib.Atten
 def calendar_item_to_booking(
     calendar_item: CalendarItem,
     room_id: str | None = None,
-    user_email: str | None = None,
+    was_fetched_from_room_calendar: bool = False,
+    room_calendar_entry_id: str | None = None,
 ) -> Booking | None:
     email_index = get_emails_to_attendees_index(calendar_item=calendar_item)
     if room_id is None:
@@ -56,33 +57,36 @@ def calendar_item_to_booking(
         if room is None:
             return None
 
-        if room.resource_email not in email_index:
+        if not was_fetched_from_room_calendar and room.resource_email not in email_index:
             return None
 
-    related_to_me = None
-    if user_email is not None:
-        for email, _attendee in email_index.items():
-            if email == user_email:
-                related_to_me = True
-                break
-        else:
-            related_to_me = False
+    attendees = [
+        Attendee(
+            email=email,
+            status=cast(BookingStatus | None, attendee.response_type),
+            assosiated_room_id=r.id if (r := room_repository.get_by_email(email)) is not None else None,
+        )
+        for email, attendee in email_index.items()
+    ]
+    if was_fetched_from_room_calendar and room.resource_email not in email_index:
+        # Should add the room as attendee
+        attendees.insert(
+            0,
+            Attendee(
+                email=room.resource_email,
+                status=cast(BookingStatus | None, calendar_item.my_response_type),
+                assosiated_room_id=room.id,
+            ),
+        )
 
     return Booking(
         room_id=room.id,
         title=cast(str, calendar_item.subject) or "Busy",
         start=to_msk(cast(datetime.datetime, calendar_item.start)),
         end=to_msk(cast(datetime.datetime, calendar_item.end)),
-        outlook_booking_id=str(calendar_item.id),
-        attendees=[
-            Attendee(
-                email=email,
-                status=cast(BookingStatus | None, attendee.response_type),
-                assosiated_room_id=room.id if (room := room_repository.get_by_email(email)) is not None else None,
-            )
-            for email, attendee in email_index.items()
-        ],
-        related_to_me=related_to_me,
+        outlook_booking_id=str(calendar_item.id) if not was_fetched_from_room_calendar else None,
+        outlook_entry_id=room_calendar_entry_id if was_fetched_from_room_calendar else None,
+        attendees=attendees,
     )
 
 

@@ -200,6 +200,29 @@ async def get_attendee_details(
 
 
 @router.get(
+    "/bookings/by-entry-id/{outlook_entry_id}",
+    responses={404: {"description": "Booking not found OR Room attendee not found in booking attendees"}},
+)
+async def get_booking_by_entry_id(
+    user: VerifiedDep,
+    outlook_entry_id: str,
+    room_id: str,
+) -> Booking:
+    room = room_repository.get_by_id(room_id=room_id)
+    if room is None:
+        raise HTTPException(404, "Room not found")
+
+    booking = await exchange_booking_repository.get_booking_by_entry_id(
+        outlook_entry_id=outlook_entry_id,
+        room=room,
+    )
+    if booking is None:
+        raise HTTPException(404, "Booking not found")
+
+    return set_related_to_me(booking, user.email)
+
+
+@router.get(
     "/bookings/{outlook_booking_id:path}",
     responses={404: {"description": "Booking not found OR Room attendee not found in booking attendees"}},
 )
@@ -208,7 +231,7 @@ async def get_booking(outlook_booking_id: str, user: VerifiedDep) -> Booking:
     if calendar_item is None:
         raise HTTPException(404, "Booking not found")
 
-    if (booking := calendar_item_to_booking(calendar_item, user_email=user.email)) is None:
+    if (booking := calendar_item_to_booking(calendar_item)) is None:
         raise HTTPException(404, "Room attendee not found in booking attendees")
 
     return set_related_to_me(booking, user.email)
