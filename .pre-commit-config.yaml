@@ -1,8 +1,8 @@
-# Pre-commit configuration.
-# https://pre-commit.com
+# Prek configuration.
+# https://prek.j178.dev/configuration/
 
-# pre-commit install
-# pre-commit run --all-files
+# uv run just prepare
+# uv run just prek
 
 default_stages:
   - pre-commit

@@ -13,7 +13,7 @@ This is the API for viewing the booking status of rooms.
 
 - [Python 3.14](https://www.python.org/downloads/) & [uv](https://docs.astral.sh/uv/)
 - [FastAPI](https://fastapi.tiangolo.com/)
-- Formatting and linting: [Ruff](https://docs.astral.sh/ruff/), [pre-commit](https://pre-commit.com/)
+- Formatting and linting: [Ruff](https://docs.astral.sh/ruff/), [prek](https://prek.j178.dev/)
 - Deployment: [Docker](https://www.docker.com/), [Docker Compose](https://docs.docker.com/compose/),
   [GitHub Actions](https://github.com/features/actions)
 
@@ -28,7 +28,7 @@ This is the API for viewing the booking status of rooms.
    ```
 3. Start development server (and read logs in the terminal):
    ```bash
-   uv run -m src.api --reload
+   uv run just dev
    ```
    > Follow the provided instructions (if needed).
 4. Open in the browser: http://localhost:8008
@@ -75,7 +75,7 @@ Check https://github.com/one-zero-eight/fastapi-template for updates once in a w
 
 1. Run `uv sync --upgrade` to update uv.lock file and install the latest versions of the dependencies.
 2. Run `uv tree --outdated --depth=1` will show what package versions are installed and what are the latest versions.
-3. Run `uv run pre-commit autoupdate`
+3. Run `uv run prek auto-update`
 
 Also, Dependabot will help you to keep your dependencies up-to-date, see [dependabot.yaml](.github/dependabot.yaml).
 
