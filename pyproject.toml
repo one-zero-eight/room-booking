@@ -20,7 +20,7 @@ dependencies = [
     "prek>=0.3.6",
     "pydantic[email]>=2.12.2",
     "pytest>=9.0.2",
-    "pytz~=2024.2",
+    "pytz~=2026.1",
     "pyyaml>=6.0.2",
     "requests-curl",
     "ruff>=0.7.4",
