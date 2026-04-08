@@ -1,5 +1,5 @@
 # This file should be synced with:
-# https://github.com/one-zero-eight/accounts/blob/main/src/modules/inh_accounts_sdk.py
+# https://github.com/one-zero-eight/accounts/blob/main/inh_accounts_sdk.py
 
 import datetime
 import time
