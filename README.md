@@ -28,7 +28,7 @@ This is the API for viewing the booking status of rooms.
    ```
 3. Start development server (and read logs in the terminal):
    ```bash
-   uv run just dev
+   uv run -m src.api --reload
    ```
    > Follow the provided instructions (if needed).
 4. Open in the browser: http://localhost:8008
