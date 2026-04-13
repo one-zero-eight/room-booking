@@ -8,23 +8,23 @@ readme = "README.md"
 requires-python = ">=3.14"
 
 dependencies = [
-    "authlib>=1.6.5",
+    "authlib>=1.6.10",
     "beanie>=2.0.1",
-    "colorlog>=6.8.2",
-    "cryptography>=43.0.1",
-    "exchangelib>=5.4.3",
-    "fastapi>=0.115.0",
-    "fastapi-swagger>=0.2.3",
-    "gunicorn>=23.0.0",
-    "httpx>=0.27.2",
-    "prek>=0.3.6",
-    "pydantic[email]>=2.12.2",
-    "pytest>=9.0.2",
-    "pytz~=2024.2",
-    "pyyaml>=6.0.2",
+    "colorlog>=6.10.1",
+    "cryptography>=46.0.7",
+    "exchangelib>=5.6.0",
+    "fastapi>=0.135.3",
+    "fastapi-swagger>=0.4.46",
+    "gunicorn>=25.3.0",
+    "httpx>=0.28.1",
+    "prek>=0.3.9",
+    "pydantic[email]>=2.13.0",
+    "pytest>=9.0.3",
+    "pytz~=2026.1",
+    "pyyaml>=6.0.3",
     "requests-curl",
-    "ruff>=0.7.4",
-    "uvicorn>=0.32.0",
+    "ruff>=0.15.10",
+    "uvicorn>=0.44.0",
 ]
 
 [tool.uv.sources]
