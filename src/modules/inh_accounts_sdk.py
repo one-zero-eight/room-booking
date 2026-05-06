@@ -2,14 +2,16 @@
 # https://github.com/one-zero-eight/accounts/blob/main/inh_accounts_sdk.py
 
 import datetime
-import time
+from typing import Any
 
 import httpx
-from authlib.jose import JsonWebKey, JWTClaims, KeySet, jwt
-from authlib.jose.errors import JoseError
-from beanie import PydanticObjectId
+from joserfc import jwt
+from joserfc.errors import JoseError
+from joserfc.jwk import RSAKey
+from joserfc.jwt import JWTClaimsRegistry
 from pydantic import BaseModel, Field
 
+from src.api.logging_ import logger
 from src.config import settings
 
 
@@ -52,7 +54,7 @@ class TelegramWidgetData(BaseModel):
 
 
 class UserSchema(BaseModel):
-    id: PydanticObjectId
+    id: str
     innopolis_info: InnopolisInfo
     telegram_info: TelegramInfo | None = None
     innohassle_admin: bool = False
@@ -82,7 +84,7 @@ class InNoHassleAccounts:
     api_url: str
     api_jwt_token: str
     PUBLIC_KID = "public"
-    key_set: KeySet
+    key_set: dict[str, Any] | None = None
 
     def __init__(self, api_url: str, api_jwt_token: str):
         self.api_url = api_url
@@ -91,17 +93,19 @@ class InNoHassleAccounts:
     async def update_key_set(self):
         self.key_set = await self.get_key_set()
 
-    def get_public_key(self) -> JsonWebKey:
+    def get_public_key(self) -> RSAKey:
         if self.key_set is None:
             raise RuntimeError("Key set should be initialized by `update_key_set`")
-        return self.key_set.find_by_kid(self.PUBLIC_KID)
+        key_data = next((key for key in self.key_set.get("keys", []) if key.get("kid") == self.PUBLIC_KID), None)
+        if key_data is None:
+            raise RuntimeError(f"Public key with kid={self.PUBLIC_KID!r} is missing in JWKS")
+        return RSAKey.import_key(key_data)
 
-    async def get_key_set(self) -> KeySet:
+    async def get_key_set(self) -> dict[str, Any]:
         async with httpx.AsyncClient() as client:
             response = await client.get(f"{self.api_url}/.well-known/jwks.json")
             response.raise_for_status()
-            jwks_json = response.json()
-            return JsonWebKey.import_key_set(jwks_json)
+            return response.json()
 
     def decode_token(self, token: str) -> UserTokenData | None:
         """
@@ -110,16 +114,18 @@ class InNoHassleAccounts:
         """
         try:
             payload = self._get_jwt_claims(token)
-            innohassle_id: str = payload["uid"]
+            innohassle_id: str | None = payload.get("uid")
             email: str | None = payload.get("email")
             telegram_id: int | None = payload.get("telegram_id")
+            if innohassle_id is None or email is None:
+                raise JoseError("Missing required claims: uid/email")
             return UserTokenData(
                 innohassle_id=innohassle_id,
                 email=email,
                 telegram_id=telegram_id,
             )
         except JoseError:
-            # logger.warning("Invalid token", exc_info=True)
+            logger.warning("Invalid token", exc_info=True)
             return None
 
     def get_authorized_client(self) -> httpx.AsyncClient:
@@ -128,13 +134,12 @@ class InNoHassleAccounts:
             base_url=self.api_url,
         )
 
-    def _get_jwt_claims(self, token: str) -> JWTClaims:
-        now = time.time()
+    def _get_jwt_claims(self, token: str) -> dict[str, Any]:
         pub_key = self.get_public_key()
         payload = jwt.decode(token, pub_key)
-        payload.validate_exp(now, leeway=0)
-        payload.validate_iat(now, leeway=0)
-        return payload
+        claims = payload.claims
+        JWTClaimsRegistry().validate(claims)
+        return claims
 
     async def get_user(
         self,
