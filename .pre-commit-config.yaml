@@ -1,9 +1,6 @@
 # Prek configuration.
 # https://prek.j178.dev/configuration/
 
-# uv run just prepare
-# uv run just prek
-
 default_stages:
   - pre-commit
   - pre-push
