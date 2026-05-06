@@ -3,7 +3,6 @@ __all__ = ["app"]
 import datetime
 import pprint
 import time
-import traceback
 
 import exchangelib.errors
 from fastapi import FastAPI
@@ -70,9 +69,7 @@ async def ews_error_handler(
     exc: exchangelib.errors.EWSError,
 ):
     logger.warning(f"EWS error, probably Outlook is down: {exc}", exc_info=True)
-    return JSONResponse(
-        status_code=429, content={"detail": f"EWS error, probably Outlook is down: {exc}\n\n\n{traceback.format_exc()}"}
-    )
+    return JSONResponse(status_code=429, content={"detail": f"EWS error, probably Outlook is down: {exc}"})
 
 
 last_callback_time: datetime.datetime | None = None
