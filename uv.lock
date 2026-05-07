@@ -789,7 +789,7 @@ requires-dist = [
     { name = "prek", specifier = ">=0.3.13" },
     { name = "pydantic", extras = ["email"], specifier = ">=2.13.4" },
     { name = "pytest", specifier = ">=9.0.3" },
-    { name = "pytz", specifier = "~=2026.2" },
+    { name = "pytz", specifier = ">=2026.2" },
     { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "requests-curl", git = "https://github.com/paivett/requests-curl.git?rev=82a7fc1" },
     { name = "ruff", specifier = ">=0.15.12" },
