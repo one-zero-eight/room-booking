@@ -12,9 +12,8 @@ import httpx
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, EmailStr
 
-from src.api.dependencies import ApiKeyDep, VerifiedDep
+from src.api.dependencies import ApiKeyDep, AuthContext, VerifiedDep, VerifiedOrApiKeyDep
 from src.api.logging_ import logger
-from src.config import settings
 from src.modules.bmp.repository import bmp_repository
 from src.modules.bookings.exchange_repository import exchange_booking_repository
 from src.modules.bookings.schemas import (
@@ -48,6 +47,13 @@ def _default_date_range(
     return start, end
 
 
+def _apply_related_to_me(bookings: list[Booking], auth: AuthContext) -> list[Booking]:
+    if auth.is_service:
+        return bookings
+    assert auth.user is not None
+    return set_related_to_me(bookings, auth.user.email)
+
+
 router = APIRouter(
     tags=["Bookings"],
     responses={
@@ -62,7 +68,7 @@ router = APIRouter(
     responses={400: {"description": "Start must be before end"}, 404: {"description": "Room not found"}},
 )
 async def bookings(
-    user: VerifiedDep,
+    auth: VerifiedOrApiKeyDep,
     room_id: str | None = Query(None, title="ID for getting single room bookings"),
     room_ids: list[str] | None = Query(None, title="IDs for multiple rooms bookings"),
     start: datetime.datetime | None = Query(
@@ -106,7 +112,7 @@ async def bookings(
     bookings = await exchange_booking_repository.get_bookings_for_certain_rooms(
         room_ids=room_ids_to_fetch, from_dt=start, to_dt=end
     )
-    return set_related_to_me(bookings, user.email)
+    return _apply_related_to_me(bookings, auth)
 
 
 @router.get("/bookings/my")
@@ -266,8 +272,7 @@ async def delete_booking_by_entry_id(
     if calendar_item is None:
         raise HTTPException(404, "Booking not found")
 
-    is_bmp_specialist = user.email in settings.bmp_specialist_emails
-    if not is_bmp_specialist and user.email not in get_emails_to_attendees_index(calendar_item):
+    if user.email not in get_emails_to_attendees_index(calendar_item):
         raise HTTPException(403, "You are not the participant of the booking")
 
     canceled = await exchange_booking_repository.cancel_booking(calendar_item, email=user.email)
@@ -289,13 +294,11 @@ async def cancel_extra_booking(user: VerifiedDep, request: CancelExtraBookingReq
     if room is None:
         raise HTTPException(404, "Room not found")
 
-    is_bmp_specialist = user.email in settings.bmp_specialist_emails
-
     if request.outlook_booking_id:
         calendar_item = await exchange_booking_repository.get_booking(request.outlook_booking_id)
         if calendar_item is None:
             raise HTTPException(404, "Booking not found")
-        if not is_bmp_specialist and user.email not in get_emails_to_attendees_index(calendar_item):
+        if user.email not in get_emails_to_attendees_index(calendar_item):
             raise HTTPException(403, "You are not the participant of the booking")
         await exchange_booking_repository.cancel_booking(calendar_item, email=user.email)
         return
@@ -327,7 +330,7 @@ async def cancel_extra_booking(user: VerifiedDep, request: CancelExtraBookingReq
     if calendar_item is None:
         raise HTTPException(404, "Booking not found")
 
-    if not is_bmp_specialist and user.email not in get_emails_to_attendees_index(calendar_item):
+    if user.email not in get_emails_to_attendees_index(calendar_item):
         raise HTTPException(403, "You are not the participant of the booking")
 
     canceled = await exchange_booking_repository.cancel_booking(calendar_item, email=user.email)

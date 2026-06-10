@@ -213,13 +213,6 @@ properties:
     $ref: '#/$defs/Accounts'
   exchange:
     $ref: '#/$defs/Exchange'
-  bmp_specialist_emails:
-    default: []
-    description: Allowed BMP specialist emails for /bmp endpoints
-    items:
-      type: string
-    title: Bmp Specialist Emails
-    type: array
   bmp_batch_confirm_timeout_s:
     default: 180
     description: Seconds to wait for each room meeting response during BMP batch booking

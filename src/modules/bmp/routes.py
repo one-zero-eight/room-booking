@@ -1,15 +1,13 @@
 import datetime
 import time
-from typing import Annotated
 
 from exchangelib.recurrence import Recurrence
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
-from src.api.dependencies import VerifiedDep
+from src.api.dependencies import ApiKeyDep
 from src.api.logging_ import logger
-from src.config import settings
 from src.modules.bmp.repository import (
     BmpBatchCreateEntry,
     BmpBatchItemResult,
@@ -19,14 +17,13 @@ from src.modules.bmp.repository import (
 from src.modules.bookings.schemas import Booking, CreateBookingRequest
 from src.modules.bookings.tz_utils import msk_timezone
 from src.modules.rooms.repository import room_repository
-from src.modules.rules.service import can_use_recurrence
 
 router = APIRouter(
     tags=["BMP Specialist"],
     prefix="/bmp",
     responses={
         401: {"description": "Unable to verify credentials OR Credentials not provided"},
-        403: {"description": "Unauthorized OR Not a BMP specialist OR Recurrence not allowed"},
+        403: {"description": "Room declined the booking OR Recurrence not allowed"},
         404: {
             "description": "Booking or calendar item not found (unknown id, already cancelled, or not a calendar item)"
         },
@@ -48,15 +45,6 @@ def _default_date_range(
     return start, end
 
 
-def _check_bmp_specialist(user: VerifiedDep) -> VerifiedDep:
-    if user.email not in settings.bmp_specialist_emails:
-        raise HTTPException(403, "Not a BMP specialist")
-    return user
-
-
-BMPUserDep = Annotated[VerifiedDep, Depends(_check_bmp_specialist)]
-
-
 class BmpBatchRequest(BaseModel):
     bookings: list[CreateBookingRequest]
 
@@ -65,14 +53,12 @@ class BmpBatchCancelRequest(BaseModel):
     outlook_booking_ids: list[str]
 
 
-def _parse_bmp_batch_entry(request: CreateBookingRequest, *, email: str) -> BmpBatchCreateEntry:
+def _parse_bmp_batch_entry(request: CreateBookingRequest) -> BmpBatchCreateEntry:
     if request.start >= request.end:
         raise HTTPException(400, "Start must be before end")
     room = room_repository.get_by_id(request.room_id)
     if room is None:
         raise HTTPException(404, "Room not found")
-    if request.recurrence is not None and not can_use_recurrence(email=email):
-        raise HTTPException(403, "Recurrence is not allowed for your account")
     ews_recurrence: Recurrence | None = None
     if request.recurrence is not None:
         try:
@@ -91,8 +77,8 @@ def _parse_bmp_batch_entry(request: CreateBookingRequest, *, email: str) -> BmpB
     )
 
 
-async def _create_bmp_booking(request: CreateBookingRequest, *, email: str) -> Booking:
-    entry = _parse_bmp_batch_entry(request, email=email)
+async def _create_bmp_booking(request: CreateBookingRequest) -> Booking:
+    entry = _parse_bmp_batch_entry(request)
     return await bmp_repository.create_booking(
         room=entry.room,
         start=entry.start,
@@ -107,7 +93,7 @@ async def _create_bmp_booking(request: CreateBookingRequest, *, email: str) -> B
 
 @router.get("/auto-bookings/")
 async def list_auto_bookings(
-    _bmp_user: BMPUserDep,
+    _: ApiKeyDep,
     start: datetime.datetime | None = Query(None),
     end: datetime.datetime | None = Query(None),
 ) -> list[Booking]:
@@ -123,7 +109,7 @@ async def list_auto_bookings(
     responses={404: {"description": "Item not found"}},
 )
 async def get_bmp_item_test(
-    _bmp_user: BMPUserDep,
+    _: ApiKeyDep,
     item_id: str,
 ) -> PlainTextResponse:
     item = await bmp_repository.get_item(item_id)
@@ -137,7 +123,7 @@ async def get_bmp_item_test(
     responses={404: {"description": "Booking not found"}},
 )
 async def get_auto_booking(
-    _bmp_user: BMPUserDep,
+    _: ApiKeyDep,
     outlook_booking_id: str,
 ) -> Booking:
     calendar_item = await bmp_repository.get_booking(outlook_booking_id)
@@ -150,26 +136,25 @@ async def get_auto_booking(
 
 @router.delete("/auto-bookings/")
 async def cancel_all_auto_bookings(
-    _bmp_user: BMPUserDep,
+    _: ApiKeyDep,
 ) -> CancelAllAutoBookingsResult:
     return await bmp_repository.cancel_all_auto_bookings()
 
 
 @router.delete("/auto-bookings/batch")
 async def batch_cancel_auto_bookings(
-    bmp_user: BMPUserDep,
+    _: ApiKeyDep,
     request: BmpBatchCancelRequest,
 ) -> CancelAllAutoBookingsResult:
+    actor_email = bmp_repository.account_email
     t_route = time.monotonic()
-    logger.info(
-        f"BMP batch cancel auto bookings started: user={bmp_user.email} count={len(request.outlook_booking_ids)}"
-    )
+    logger.info(f"BMP batch cancel auto bookings started: user={actor_email} count={len(request.outlook_booking_ids)}")
     result = await bmp_repository.cancel_bookings_batch(
         request.outlook_booking_ids,
-        email=bmp_user.email,
+        email=actor_email,
     )
     logger.info(
-        f"BMP batch cancel auto bookings finished: user={bmp_user.email} "
+        f"BMP batch cancel auto bookings finished: user={actor_email} "
         f"cancelled={len(result.cancelled)} failed={len(result.failed)} "
         f"took {time.monotonic() - t_route:.3f}s"
     )
@@ -181,13 +166,13 @@ async def batch_cancel_auto_bookings(
     responses={404: {"description": "Booking not found"}},
 )
 async def delete_auto_booking(
-    bmp_user: BMPUserDep,
+    _: ApiKeyDep,
     outlook_booking_id: str,
 ) -> None:
     calendar_item = await bmp_repository.get_booking(outlook_booking_id)
     if calendar_item is None:
         raise HTTPException(404, "Booking not found")
-    await bmp_repository.cancel_booking(calendar_item, email=bmp_user.email)
+    await bmp_repository.cancel_booking(calendar_item, email=bmp_repository.account_email)
 
 
 @router.post(
@@ -199,19 +184,20 @@ async def delete_auto_booking(
     },
 )
 async def create_auto_booking(
-    bmp_user: BMPUserDep,
+    _: ApiKeyDep,
     request: CreateBookingRequest,
 ) -> Booking:
-    return await _create_bmp_booking(request, email=bmp_user.email)
+    return await _create_bmp_booking(request)
 
 
 @router.post("/auto-bookings/batch")
 async def batch_auto_bookings(
-    bmp_user: BMPUserDep,
+    _: ApiKeyDep,
     request: BmpBatchRequest,
 ) -> dict[str, BmpBatchItemResult]:
+    actor_email = bmp_repository.account_email
     t_route = time.monotonic()
-    logger.info(f"BMP batch auto bookings started: user={bmp_user.email} count={len(request.bookings)}")
+    logger.info(f"BMP batch auto bookings started: user={actor_email} count={len(request.bookings)}")
     result: dict[str, BmpBatchItemResult] = {}
     pending_keys: list[str] = []
     pending_entries: list[BmpBatchCreateEntry] = []
@@ -219,7 +205,7 @@ async def batch_auto_bookings(
     for i, req in enumerate(request.bookings):
         key = str(i)
         try:
-            pending_entries.append(_parse_bmp_batch_entry(req, email=bmp_user.email))
+            pending_entries.append(_parse_bmp_batch_entry(req))
             pending_keys.append(key)
         except HTTPException as e:
             error: str | None
@@ -250,7 +236,7 @@ async def batch_auto_bookings(
     ok = sum(1 for o in result.values() if o.status == "ok")
     err = len(result) - ok
     logger.info(
-        f"BMP batch auto bookings finished: user={bmp_user.email} ok={ok} error={err} "
+        f"BMP batch auto bookings finished: user={actor_email} ok={ok} error={err} "
         f"took {time.monotonic() - t_route:.3f}s"
     )
     return result

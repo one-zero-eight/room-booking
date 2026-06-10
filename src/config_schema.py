@@ -100,8 +100,6 @@ class Settings(SettingBaseModel):
     "InNoHassle Accounts integration settings"
     exchange: Exchange
     "Exchange (Outlook) integration settings"
-    bmp_specialist_emails: list[str] = []
-    "Allowed BMP specialist emails for /bmp endpoints"
     bmp_batch_confirm_timeout_s: int = 180
     "Seconds to wait for each room meeting response during BMP batch booking confirm"
 

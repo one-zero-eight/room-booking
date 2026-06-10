@@ -9,7 +9,7 @@ import datetime
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from src.api.dependencies import VerifiedDep
+from src.api.dependencies import AuthContext, VerifiedDep, VerifiedOrApiKeyDep
 from src.config_schema import AccessToRoom, Room
 from src.modules.bookings.exchange_repository import Booking, exchange_booking_repository
 from src.modules.bookings.service import set_related_to_me
@@ -20,13 +20,20 @@ from src.modules.rules.service import can_book
 router = APIRouter(tags=["Rooms"])
 
 
+def _apply_related_to_me(bookings: list[Booking], auth: AuthContext) -> list[Booking]:
+    if auth.is_service:
+        return bookings
+    assert auth.user is not None
+    return set_related_to_me(bookings, auth.user.email)
+
+
 class CanBookResponse(BaseModel):
     can_book: bool
     reason_why_cannot: str
 
 
 @router.get("/rooms/")
-async def rooms(_: VerifiedDep, include_red: bool = False) -> list[Room]:
+async def rooms(_: VerifiedOrApiKeyDep, include_red: bool = False) -> list[Room]:
     return room_repository.get_all(include_red)
 
 
@@ -106,7 +113,7 @@ async def room_can_book_route(
     },
 )
 async def room_bookings_route(
-    id: str, user: VerifiedDep, start: datetime.datetime, end: datetime.datetime
+    id: str, auth: VerifiedOrApiKeyDep, start: datetime.datetime, end: datetime.datetime
 ) -> list[Booking]:
     if start >= end:
         raise HTTPException(400, "Start must be before end")
@@ -114,4 +121,4 @@ async def room_bookings_route(
     if obj is None:
         raise HTTPException(404, "Room not found")
     bookings = await exchange_booking_repository.get_bookings_for_room(room_id=id, from_dt=start, to_dt=end)
-    return set_related_to_me(bookings, user.email)
+    return _apply_related_to_me(bookings, auth)

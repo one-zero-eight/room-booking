@@ -1,5 +1,6 @@
-__all__ = ["ApiKeyDep", "VerifiedDep"]
+__all__ = ["ApiKeyDep", "AuthContext", "VerifiedDep", "VerifiedOrApiKeyDep"]
 
+from dataclasses import dataclass
 from typing import Annotated
 
 from fastapi import Depends
@@ -8,6 +9,13 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from src.api.exceptions import IncorrectCredentialsException
 from src.config import settings
 from src.modules.inh_accounts_sdk import UserTokenData, inh_accounts
+
+
+@dataclass(frozen=True)
+class AuthContext:
+    user: UserTokenData | None
+    is_service: bool
+
 
 bearer_scheme = HTTPBearer(
     scheme_name="Bearer",
@@ -46,4 +54,25 @@ VerifiedDep = Annotated[UserTokenData, Depends(verify_user)]
 ApiKeyDep = Annotated[str, Depends(api_key_dep)]
 """
 Dependency for checking if the request is coming from an authorized external service.
+"""
+
+
+async def verify_user_or_api_key(
+    bearer: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+) -> AuthContext:
+    token = bearer and bearer.credentials
+    if not token:
+        raise IncorrectCredentialsException(no_credentials=True)
+    if token == settings.api_key.get_secret_value():
+        return AuthContext(user=None, is_service=True)
+
+    token_data = inh_accounts.decode_token(token)
+    if token_data is None:
+        raise IncorrectCredentialsException(no_credentials=False)
+    return AuthContext(user=token_data, is_service=False)
+
+
+VerifiedOrApiKeyDep = Annotated[AuthContext, Depends(verify_user_or_api_key)]
+"""
+Dependency that accepts either a user JWT or the service api_key.
 """

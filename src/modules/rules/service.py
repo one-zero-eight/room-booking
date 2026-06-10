@@ -1,7 +1,6 @@
 import datetime
 from typing import Literal
 
-from src.config import settings
 from src.modules.bookings.exchange_repository import to_msk
 from src.modules.inh_accounts_sdk import InnopolisInfo, UserSchema
 from src.modules.rooms.repository import Room, room_repository
@@ -10,8 +9,6 @@ type Role = Literal["none", "student", "staff"]
 
 
 def can_use_recurrence(*, email: str, user: UserSchema | None = None) -> bool:
-    if email in settings.bmp_specialist_emails:
-        return True
     if user is None:
         return False
     if user.innohassle_admin:
