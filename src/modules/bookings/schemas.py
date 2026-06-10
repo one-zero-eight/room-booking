@@ -2,6 +2,7 @@ from typing import Literal
 
 from pydantic import BaseModel, computed_field
 
+from src.modules.bookings.recurrence import RecurrencePattern
 from src.modules.bookings.tz_utils import MSKDatetime
 
 type BookingStatus = Literal["Accept", "Tentative", "Decline", "Unknown"]
@@ -31,6 +32,10 @@ class Booking(BaseModel):
     "Hex Entry Id returned by Outlook's free busy info. Only set if we cannot manage the booking."
     attendees: list[Attendee] | None
     "List of attendees of the booking"
+    categories: list[str] | None = None
+    "Outlook categories on the calendar item"
+    recurrence: str | None = None
+    "EWS Recurrence XML when the calendar item is a recurring master"
     related_to_me: bool | None = None
     """
     Whether the booking is related to the user, so he can delete, update it or not.
@@ -55,6 +60,12 @@ class CreateBookingRequest(BaseModel):
     "End time of the booking"
     participant_emails: list[str] | None
     "List of participant emails to invite to the booking"
+    recurrence: RecurrencePattern | None = None
+    "Optional recurrence pattern"
+    categories: list[str] | None = None
+    "Optional Outlook categories"
+    description: str | None = None
+    "Optional text appended to the calendar item body after the standard notice"
 
 
 class PatchBookingRequest(BaseModel):
@@ -64,3 +75,12 @@ class PatchBookingRequest(BaseModel):
     "New start time of the booking"
     end: MSKDatetime | None
     "New end time of the booking"
+
+
+class CancelExtraBookingRequest(BaseModel):
+    room_id: str
+    start: MSKDatetime
+    end: MSKDatetime
+    title: str
+    outlook_booking_id: str | None = None
+    outlook_entry_id: str | None = None

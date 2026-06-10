@@ -56,11 +56,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from src.modules.bmp.routes import router as router_bmp  # noqa: E402
 from src.modules.bookings.routes import router as router_bookings  # noqa: E402
 from src.modules.rooms.routes import router as router_rooms  # noqa: E402
 
 app.include_router(router_rooms)
 app.include_router(router_bookings)
+app.include_router(router_bmp)
 
 
 @app.exception_handler(exchangelib.errors.EWSError)

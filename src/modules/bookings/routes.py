@@ -7,15 +7,19 @@ __all__ = ["router"]
 import datetime
 from typing import cast
 
+import exchangelib
 import httpx
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, EmailStr
 
 from src.api.dependencies import ApiKeyDep, VerifiedDep
 from src.api.logging_ import logger
+from src.config import settings
+from src.modules.bmp.repository import bmp_repository
 from src.modules.bookings.exchange_repository import exchange_booking_repository
 from src.modules.bookings.schemas import (
     Booking,
+    CancelExtraBookingRequest,
     CreateBookingRequest,
     PatchBookingRequest,
 )
@@ -28,7 +32,7 @@ from src.modules.bookings.service import (
 from src.modules.bookings.tz_utils import msk_timezone
 from src.modules.inh_accounts_sdk import inh_accounts
 from src.modules.rooms.repository import room_repository
-from src.modules.rules.service import can_book
+from src.modules.rules.service import can_book, can_use_recurrence
 
 
 def _default_date_range(
@@ -125,8 +129,8 @@ async def my_bookings(
 @router.post(
     "/bookings/",
     responses={
-        400: {"description": "Start must be before end"},
-        403: {"description": "Room declined the booking OR Invalid user"},
+        400: {"description": "Start must be before end or invalid recurrence"},
+        403: {"description": "Room declined the booking OR Invalid user OR Recurrence not allowed"},
         404: {
             "description": "Room not found OR Booking was removed during booking OR Room attendee not found in booking attendees"
         },
@@ -148,6 +152,18 @@ async def create_booking(user: VerifiedDep, request: CreateBookingRequest) -> Bo
     if not can:
         raise HTTPException(403, why)
 
+    if request.recurrence is not None and not can_use_recurrence(
+        email=innohassle_user.innopolis_info.email, user=innohassle_user
+    ):
+        raise HTTPException(403, "Recurrence is not allowed for your account")
+
+    ews_recurrence = None
+    if request.recurrence is not None:
+        try:
+            ews_recurrence = request.recurrence.to_exchangelib_recurrence()
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+
     booking = await exchange_booking_repository.create_booking(
         room=room,
         start=request.start,
@@ -155,6 +171,9 @@ async def create_booking(user: VerifiedDep, request: CreateBookingRequest) -> Bo
         title=request.title,
         organizer=innohassle_user,
         participant_emails=request.participant_emails or [],
+        recurrence=ews_recurrence,
+        categories=request.categories,
+        description=request.description,
     )
     return set_related_to_me(booking, innohassle_user.innopolis_info.email)
 
@@ -200,7 +219,7 @@ async def get_attendee_details(
 
 
 @router.get(
-    "/bookings/by-entry-id/{outlook_entry_id}",
+    "/bookings/by-entry-id/{outlook_entry_id:path}",
     responses={404: {"description": "Booking not found OR Room attendee not found in booking attendees"}},
 )
 async def get_booking_by_entry_id(
@@ -220,6 +239,100 @@ async def get_booking_by_entry_id(
         raise HTTPException(404, "Booking not found")
 
     return set_related_to_me(booking, user.email)
+
+
+@router.delete(
+    "/bookings/by-entry-id/{outlook_entry_id:path}",
+    status_code=200,
+    responses={
+        200: {"description": "Canceled successfully"},
+        403: {"description": "You are not the participant of the booking"},
+        404: {"description": "Booking not found OR Room not found"},
+    },
+)
+async def delete_booking_by_entry_id(
+    user: VerifiedDep,
+    outlook_entry_id: str,
+    room_id: str,
+) -> None:
+    room = room_repository.get_by_id(room_id=room_id)
+    if room is None:
+        raise HTTPException(404, "Room not found")
+
+    calendar_item = await exchange_booking_repository.get_calendar_item_by_entry_id(
+        outlook_entry_id=outlook_entry_id,
+        room=room,
+    )
+    if calendar_item is None:
+        raise HTTPException(404, "Booking not found")
+
+    is_bmp_specialist = user.email in settings.bmp_specialist_emails
+    if not is_bmp_specialist and user.email not in get_emails_to_attendees_index(calendar_item):
+        raise HTTPException(403, "You are not the participant of the booking")
+
+    canceled = await exchange_booking_repository.cancel_booking(calendar_item, email=user.email)
+    if not canceled:
+        raise HTTPException(404, "Booking not found")
+
+
+@router.post(
+    "/bookings/cancel-extra",
+    status_code=200,
+    responses={
+        200: {"description": "Canceled successfully"},
+        403: {"description": "You are not the participant of the booking"},
+        404: {"description": "Booking not found OR Room not found"},
+    },
+)
+async def cancel_extra_booking(user: VerifiedDep, request: CancelExtraBookingRequest) -> None:
+    room = room_repository.get_by_id(room_id=request.room_id)
+    if room is None:
+        raise HTTPException(404, "Room not found")
+
+    is_bmp_specialist = user.email in settings.bmp_specialist_emails
+
+    if request.outlook_booking_id:
+        calendar_item = await exchange_booking_repository.get_booking(request.outlook_booking_id)
+        if calendar_item is None:
+            raise HTTPException(404, "Booking not found")
+        if not is_bmp_specialist and user.email not in get_emails_to_attendees_index(calendar_item):
+            raise HTTPException(403, "You are not the participant of the booking")
+        await exchange_booking_repository.cancel_booking(calendar_item, email=user.email)
+        return
+
+    if await bmp_repository.cancel_auto_booking_by_slot(
+        room_id=request.room_id,
+        start=request.start,
+        end=request.end,
+        title=request.title,
+        email=user.email,
+    ):
+        return
+
+    calendar_item: exchangelib.CalendarItem | None = None
+    if request.outlook_entry_id:
+        calendar_item = await exchange_booking_repository.get_calendar_item_by_entry_id(
+            outlook_entry_id=request.outlook_entry_id,
+            room=room,
+        )
+
+    if calendar_item is None:
+        calendar_item = await exchange_booking_repository.find_calendar_item_for_room_slot(
+            room=room,
+            start=request.start,
+            end=request.end,
+            title=request.title,
+        )
+
+    if calendar_item is None:
+        raise HTTPException(404, "Booking not found")
+
+    if not is_bmp_specialist and user.email not in get_emails_to_attendees_index(calendar_item):
+        raise HTTPException(403, "You are not the participant of the booking")
+
+    canceled = await exchange_booking_repository.cancel_booking(calendar_item, email=user.email)
+    if not canceled:
+        raise HTTPException(404, "Booking not found")
 
 
 @router.get(

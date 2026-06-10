@@ -50,6 +50,15 @@ class Accounts(SettingBaseModel):
     "JWT token for accessing the Accounts API as a service"
 
 
+class BmpExchange(SettingBaseModel):
+    """Dedicated BMP mailbox; bookings go to the default calendar with Auto markers."""
+
+    username: str
+    "BMP account email"
+    password: SecretStr
+    "Password for the BMP account"
+
+
 class Exchange(SettingBaseModel):
     """Exchange (Outlook) integration settings"""
 
@@ -61,6 +70,8 @@ class Exchange(SettingBaseModel):
     "Password for accessing the EWS endpoint"
     ews_callback_url: str | None = None
     "URL of the EWS callback for push subscription"
+    bmp: BmpExchange
+    "Dedicated BMP account and Auto calendar"
 
 
 class Settings(SettingBaseModel):
@@ -89,6 +100,10 @@ class Settings(SettingBaseModel):
     "InNoHassle Accounts integration settings"
     exchange: Exchange
     "Exchange (Outlook) integration settings"
+    bmp_specialist_emails: list[str] = []
+    "Allowed BMP specialist emails for /bmp endpoints"
+    bmp_batch_confirm_timeout_s: int = 180
+    "Seconds to wait for each room meeting response during BMP batch booking confirm"
 
     @classmethod
     def from_yaml(cls, path: Path) -> "Settings":

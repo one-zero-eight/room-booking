@@ -5,20 +5,27 @@ from typing import cast, overload
 import exchangelib
 from exchangelib import CalendarItem
 
+from src.api.logging_ import logger
 from src.config_schema import Room
+from src.modules.bookings.recurrence import recurrence_to_xml
 from src.modules.bookings.schemas import Attendee, Booking, BookingStatus
 from src.modules.bookings.tz_utils import to_msk
 from src.modules.rooms.repository import room_repository
 
 
 def get_emails_to_attendees_index(calendar_item: CalendarItem) -> dict[str, exchangelib.Attendee]:
-    if not calendar_item.required_attendees:
-        return {}
+    emails: dict[str, exchangelib.Attendee] = {}
 
-    emails = {}
-    for attendee in cast(Iterable[exchangelib.Attendee], calendar_item.required_attendees):
-        if attendee.mailbox and cast(exchangelib.Mailbox, attendee.mailbox).email_address:
-            emails[cast(str, cast(exchangelib.Mailbox, attendee.mailbox).email_address)] = attendee
+    def _add_attendee(attendee: exchangelib.Attendee) -> None:
+        if attendee.mailbox and attendee.mailbox.email_address:
+            emails[attendee.mailbox.email_address] = attendee
+
+    if calendar_item.required_attendees:
+        for attendee in cast(Iterable[exchangelib.Attendee], calendar_item.required_attendees):
+            _add_attendee(attendee)
+    if calendar_item.resources:
+        for attendee in cast(Iterable[exchangelib.Attendee], calendar_item.resources):
+            _add_attendee(attendee)
 
     return emails
 
@@ -42,12 +49,14 @@ def calendar_item_to_booking(
     room_id: str | None = None,
     was_fetched_from_room_calendar: bool = False,
     room_calendar_entry_id: str | None = None,
+    recurrence_xml: str | None = None,
 ) -> Booking | None:
     email_index = get_emails_to_attendees_index(calendar_item=calendar_item)
     if room_id is None:
         room = get_first_room_from_emails(emails=email_index.keys())
 
         if room is None:
+            logger.warning(f"Room not found for email index: {calendar_item}")
             return None
 
         room_id = room.id
@@ -55,9 +64,11 @@ def calendar_item_to_booking(
         room = room_repository.get_by_id(room_id)
 
         if room is None:
+            logger.warning(f"Room not found for room ID: {room_id}")
             return None
 
         if not was_fetched_from_room_calendar and room.resource_email not in email_index:
+            logger.warning(f"Room email not found in email index: {calendar_item}")
             return None
 
     attendees = [
@@ -79,6 +90,10 @@ def calendar_item_to_booking(
             ),
         )
 
+    categories = list(calendar_item.categories) if calendar_item.categories else None
+    if recurrence_xml is None:
+        recurrence_xml = recurrence_to_xml(calendar_item.recurrence, version=calendar_item.account.version)
+
     return Booking(
         room_id=room.id,
         title=cast(str, calendar_item.subject) or "Busy",
@@ -87,6 +102,8 @@ def calendar_item_to_booking(
         outlook_booking_id=str(calendar_item.id) if not was_fetched_from_room_calendar else None,
         outlook_entry_id=room_calendar_entry_id if was_fetched_from_room_calendar else None,
         attendees=attendees,
+        categories=categories,
+        recurrence=recurrence_xml,
     )
 
 

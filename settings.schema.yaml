@@ -36,6 +36,26 @@ $defs:
     - api_jwt_token
     title: Accounts
     type: object
+  BmpExchange:
+    additionalProperties: false
+    description: Dedicated BMP mailbox; bookings go to the default calendar with Auto
+      markers.
+    properties:
+      username:
+        description: BMP account email
+        title: Username
+        type: string
+      password:
+        description: Password for the BMP account
+        format: password
+        title: Password
+        type: string
+        writeOnly: true
+    required:
+    - username
+    - password
+    title: BmpExchange
+    type: object
   Environment:
     enum:
     - development
@@ -68,9 +88,13 @@ $defs:
         default: null
         description: URL of the EWS callback for push subscription
         title: Ews Callback Url
+      bmp:
+        $ref: '#/$defs/BmpExchange'
+        description: Dedicated BMP account and Auto calendar
     required:
     - username
     - password
+    - bmp
     title: Exchange
     type: object
   Room:
@@ -189,6 +213,19 @@ properties:
     $ref: '#/$defs/Accounts'
   exchange:
     $ref: '#/$defs/Exchange'
+  bmp_specialist_emails:
+    default: []
+    description: Allowed BMP specialist emails for /bmp endpoints
+    items:
+      type: string
+    title: Bmp Specialist Emails
+    type: array
+  bmp_batch_confirm_timeout_s:
+    default: 180
+    description: Seconds to wait for each room meeting response during BMP batch booking
+      confirm
+    title: Bmp Batch Confirm Timeout S
+    type: integer
 required:
 - api_key
 - accounts
