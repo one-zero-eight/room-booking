@@ -1,4 +1,7 @@
-# Room booking
+> [!WARNING]
+> Moved to https://github.com/one-zero-eight/monorepo
+
+# ~~Room booking~~
 
 ## Table of contents
 
