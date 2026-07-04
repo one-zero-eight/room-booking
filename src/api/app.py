@@ -137,10 +137,10 @@ async def ews_callback(request: Request):
     return Response(content=data, status_code=201, media_type="text/xml; charset=utf-8")
 
 
+# FIXME: came up with internal mechanism for checking status instead of uptime.dofi4ka.ru
 from pydantic import BaseModel
 
 
-# FIXME: came up with internal mechanism for checking status instead of uptime.dofi4ka.ru
 class UptimeSchema(BaseModel):
     class Status(BaseModel):
         status: int
@@ -160,4 +160,4 @@ async def get_status() -> UptimeSchema:
     payload = response.json()
     uptime = payload["heartbeatList"]["20"]
 
-    return UptimeSchema.model_validate(uptime)
+    return UptimeSchema.model_validate({"uptime": uptime})
